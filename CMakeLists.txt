@@ -55,3 +55,15 @@ target_link_libraries(${PROJECT_NAME} SDL2-static)
 add_library(libwebp ${LIBWEBP_SOURCES})
 target_include_directories(libwebp PUBLIC "extern/libwebp")
 target_link_libraries(${PROJECT_NAME} libwebp)
+
+file(
+        GLOB
+        PA_TESTS
+        "test/*.cpp"
+    )
+
+foreach(TEST_SOURCE ${PA_TESTS})
+    cmake_path(GET TEST_SOURCE STEM TEST_NAME)
+    add_executable(${TEST_NAME} ${TEST_SOURCE})
+    target_include_directories(${TEST_NAME} PUBLIC "src")
+endforeach()
