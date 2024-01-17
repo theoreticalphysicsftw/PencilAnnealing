@@ -20,42 +20,26 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-
 #pragma once
 
-#include "Algebra.hpp"
+#include <random>
 
 namespace PA
 {
-	template <typename TF, U32 Dim>
-	struct BBox
-	{
-		using Scalar = TF;
-		using Vec = Vector<TF, Dim>;
-		using VecSpan = Span<const Vec>;
+	inline static std::random_device GRandomSeed;
+	inline static std::mt19937 GMerseneTwister(GRandomSeed());
 
-		Vec lower;
-		Vec upper;
-
-		BBox(VecSpan points);
-	};
+	template <typename TF>
+	auto GetUniformFloat01() -> TF;
 }
 
+
 namespace PA
 {
-	template<typename TF, U32 Dim>
-	inline BBox<TF, Dim>::BBox(VecSpan points)
+	template<typename TF>
+	auto GetUniformFloat01() -> TF
 	{
-		auto infinity = Limits<Scalar>::infinity();
-		Vec minTmp(infinity, infinity);
-		Vec maxTmp(-infinity, -infinity);
-		for (auto& point : points)
-		{
-			minTmp = Min(minTmp, point);
-			maxTmp = Max(maxTmp, point);
-		}
-
-		lower = minTmp;
-		upper = maxTmp;
+		std::uniform_real_distribution<TF> dist(TF(0), TF(1));
+		return dist(GMerseneTwister);
 	}
 }

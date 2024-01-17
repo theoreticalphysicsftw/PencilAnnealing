@@ -46,7 +46,8 @@ namespace PA
 
 	private:
 		auto ToScreenSpaceCoordinates(Vec in) -> Vec;
-		auto DrawBezierToSurface(const QuadraticBezier& b, const RawCPUImage& img) -> Pair<U32, U32>;
+		auto ToScreenSpaceCoordinates(Span<Vec> in) -> V;
+		auto DrawBezierToSurface(const QuadraticBezier& b, RawCPUImage& img) -> Pair<U32, U32>;
 	};
 }
 
@@ -75,6 +76,8 @@ namespace PA
 			currentApproximation.data[i] = 255u;
 			workingApproximation.data[i] = 255u;
 		}
+
+		DrawBezierToSurface(QuadraticBezier(Vec(0.4, 0.4), Vec(0.6, 0.4), Vec(0.6, 0.6)), currentApproximation);
 	}
 
 
@@ -97,15 +100,44 @@ namespace PA
 	inline auto Annealer<TF>::ToScreenSpaceCoordinates(Vec in) -> Vec
 	{
 		Vec result;
-		result[0] = in[0] * grayscaleReference.width;
-		result[1] = (TF(1) - in[1]) * grayscaleReference.height;
+		result[0] = in[0] * (grayscaleReference.width - 1);
+		result[1] = (TF(1) - in[1]) * (grayscaleReference.height - 1);
 		return result;
 	}
 
 
 	template<typename TF>
-	inline auto Annealer<TF>::DrawBezierToSurface(const QuadraticBezier& b, const RawCPUImage& img) -> Pair<U32, U32>
+	inline auto Annealer<TF>::ToScreenSpaceCoordinates(Span<Vec> in) -> V
 	{
-		
+		for (auto& vec : in)
+		{
+			vec = ToScreenSpaceCoordinates(vec);
+		}
+	}
+
+
+	template<typename TF>
+	inline auto Annealer<TF>::DrawBezierToSurface(const QuadraticBezier& curve, RawCPUImage& img) -> Pair<U32, U32>
+	{
+		auto bBox = curve.GetBBox();
+		auto lowerLeft = ToScreenSpaceCoordinates(bBox.lower);
+		auto upperRight = ToScreenSpaceCoordinates(bBox.upper);
+		auto lowerRight = Vec(upperRight[0], lowerLeft[1]);
+		auto upperLeft = Vec(lowerLeft[0], upperRight[1]);
+		auto minIdx = LebesgueCurve(upperLeft[0], upperLeft[1]);
+		auto maxIdx = LebesgueCurve(lowerRight[0], lowerRight[1]);
+
+		auto screenCurve = curve;
+		ToScreenSpaceCoordinates(screenCurve.points);
+
+		for (auto i = minIdx; i <= maxIdx; ++i)
+		{
+			auto coords = LebesgueCurveInverse(i);
+			auto dist = screenCurve.GetDistanceFrom(Vec(coords.first, coords.second));
+			auto val = SmoothStep(TF(0), TF(1), dist / 2.f);
+			img.data[i] = U8(TF(255) * val);
+		}
+
+		return Pair<U32, U32>(minIdx, maxIdx);
 	}
 }

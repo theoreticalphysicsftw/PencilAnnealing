@@ -26,6 +26,7 @@
 #include "Vector.hpp"
 #include "Matrix.hpp"
 #include "Arithmetic.hpp"
+#include "Error.hpp"
 
 namespace PA
 {
@@ -46,7 +47,7 @@ namespace PA
     template<typename TF>
     auto SolveCubic(TF a, TF b, TF c, TF d) -> StaticArray<TF, 3>
     {
-        static constexpr TF tolerance = TF(4) * Limits<TF>::epsilon();
+        static constexpr TF tolerance = TF(16) * Limits<TF>::epsilon();
         PA_ASSERT(a > tolerance);
         auto nan = Limits<TF>::quiet_NaN();
         StaticArray<TF, 3> roots =
@@ -64,13 +65,7 @@ namespace PA
 
         auto discriminant = TF(-4) * p * p * p - TF(27) * q * q;
 
-        if (discriminant < -tolerance)
-        {
-            // No real roots;
-            return roots;
-        }
-
-        if (discriminant < tolerance)
+        if (Abs(discriminant) < tolerance)
         {
             if (p > -tolerance && p < tolerance)
             {

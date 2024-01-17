@@ -36,7 +36,7 @@ I32 main(I32 argc, const C** argv)
 					auto roots = SolveCubic(a, b, c, d);
 					for (auto r = 0; r < 3; ++r)
 					{
-						if (!IsNan(roots[r]))
+						if (roots[r] >= 0 && roots[r] <= 1)
 						{
 							auto val = a * roots[r] * roots[r] * roots[r] + b * roots[r] * roots[r] + c * roots[r] + d;
 							if (Abs(val) < Max(tolerance, tolerance * Abs(roots[r])))

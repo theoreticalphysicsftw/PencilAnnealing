@@ -33,15 +33,25 @@ namespace PA
         union
         {
             T data[TRows * TCols];
-            Vector<T, TRows> columns[TCols];
+            Vector<T, TRows> rows[TCols];
         };
 
-        Vector<T, TRows>& operator[](U32 n) { return columns[n]; }
-        const Vector<T, TRows>&& operator[](U32 n) const { return columns[n]; }
+        Vector<T, TCols>& operator[](U32 n) { return rows[n]; }
+        const Vector<T, TCols>&& operator[](U32 n) const { return rows[n]; }
 
         template <typename... Ts>
             requires CAllAreConstructibleFrom<T, Ts...>
         Matrix(Ts... elements) : data{ static_cast<T>(elements)... } {};
+
+        Vector<T, TCols> operator*(const Vector<T, TCols>& v)
+        {
+            Vector<T, TCols> result;
+            for (auto i = 0; i < TCols; ++i)
+            {
+                result[i] = rows[i].Dot(v);
+            }
+            return result;
+        }
 
         PA_DEFINE_COMPONENT_WISE_OPERATOR(Matrix, TRows * TCols, +);
         PA_DEFINE_COMPONENT_WISE_OPERATOR(Matrix, TRows * TCols, -);
@@ -71,4 +81,12 @@ namespace PA
     PA_DEFINE_MATRIX_COMPONENT_WISE_FUNCTION(ArcCos);
 
     #undef PA_DEFINE_MATRIX_COMPONENT_WISE_FUNCTION
+
+    template <typename TF>
+    auto CreateRotation(TF angle) -> Matrix<TF, 2, 2>
+    {
+        TF cA = Cos(angle);
+        TF sA = Sin(angle);
+        return Matrix<TF, 2, 2>(cA, -sA, sA, cA);
+    }
 }

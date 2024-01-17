@@ -48,8 +48,14 @@ namespace PA
     template <typename TF>
     inline auto Abs(TF n) -> TF;
 
+    template <typename T>
+    inline auto SmoothStep(T range0, T range1, T x) -> T;
+
     template <typename TF>
     inline auto IsNan(TF n) -> B;
+
+    template <typename T>
+    inline auto Clamp(T value, T range0, T range1) -> T;
 
 
     template <typename TF>
@@ -113,9 +119,24 @@ namespace PA
     }
 
 
+    template<typename T>
+    auto SmoothStep(T range0, T range1, T x) -> T
+    {
+        x = Clamp((x - range0) / (range1 - range0), T(0), T(1));
+        return x * x * (T(3) - T(2) * x);
+    }
+
+
     template<typename TF>
     auto IsNan(TF n) -> B
     {
         return std::isnan(n);
+    }
+
+
+    template<typename T>
+    auto Clamp(T value, T range0, T range1) -> T
+    {
+        return Min(Max(value, range0), range1);
     }
 }
