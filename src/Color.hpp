@@ -69,7 +69,7 @@ namespace PA
 	inline auto RGBAToYCbCrA(ColorU32) -> ColorU32;
 	inline auto YUVAToRGBA(ColorU32) -> ColorU32;
 	inline auto RGBAToYUVA(ColorU32) -> ColorU32;
-
+	inline auto RGBAToGrayscale(ColorU32) -> U8;
 }
 
 
@@ -136,5 +136,11 @@ namespace PA
 		yuva.v = ClampedU8(0.615f * rgba.r - 0.515f * rgba.g - 0.1f * rgba.b);
 		yuva.a = rgba.a;
 		return yuva;
+	}
+
+
+	auto RGBAToGrayscale(ColorU32 c) -> U8
+	{
+		return ClampedU8(0.299f * c.r + 0.587 * c.g + 0.114 * c.b) * (c.a / 255.f);
 	}
 }

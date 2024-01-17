@@ -22,6 +22,7 @@
 
 
 #include "Types.hpp"
+#include "Utilities.hpp"
 #include "PresentSurface.hpp"
 #include "EmbeddedTestImage.hpp"
 #include "Webp.hpp"
@@ -33,21 +34,13 @@ I32 main(I32 argc, C** argv)
 {
 	auto rawImage = DecodeWebP(GEmbeddedTestImageData, CEmbeddedTestImageSize);
 	PA_ASSERT(PresentSurface::Init(rawImage.width, rawImage.height));
-
+	Annealer<F32> annealer(&rawImage);
 	PresentSurface::AddRenderingCode
 	(
-		[]()
+		[&annealer]()
 		{
 			auto target = PresentSurface::LockScreenTarget();
-
-			for (auto i = 0; i < target.width; ++i)
-			{
-				for (auto j = 0; j < target.height; ++j)
-				{
-					target.data[i * target.stride + j * 4 + 1] = (i % 2 == 0) ? 255 : 0;
-				}
-			}
-
+			annealer.CopyCurrentApproximationToColor((ColorU32*)target.data, target.stride);
 			PresentSurface::UnlockScreenTarget();
 		}
 	);

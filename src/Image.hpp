@@ -36,6 +36,8 @@ namespace PA
 		Invalid
 	};
 
+	inline auto GetSize(EFormat format);
+
 	struct Extent
 	{
 		U32 x;
@@ -48,9 +50,36 @@ namespace PA
 
 	struct RawCPUImage
 	{
+		B lebesgueOrdered;
 		EFormat format;
 		U32 height;
 		U32 width;
 		Array<Byte> data;
+
+		RawCPUImage(U32 width = 0, U32 height = 0, EFormat format = EFormat::Invalid, B lebesgueOrdered = false);
 	};
+}
+
+
+namespace PA
+{
+	inline auto GetSize(EFormat format)
+	{
+		static constexpr U32 sizeTable[] =
+		{
+			1,
+			4,
+			16,
+			16,
+			0
+		};
+
+		return sizeTable[U32(format)];
+	}
+
+	inline RawCPUImage::RawCPUImage(U32 width, U32 height, EFormat format, B lebesgueOrdered) :
+		width(width), height(height), format(format), lebesgueOrdered(lebesgueOrdered)
+	{
+		data.resize(height * width * GetSize(format));
+	}
 }

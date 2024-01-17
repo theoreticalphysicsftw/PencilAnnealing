@@ -42,6 +42,7 @@ namespace PA
         template <typename... Ts>
             requires CAllAreConstructibleFrom<T, Ts...>
         Vector(Ts... elements) : data{ static_cast<T>(elements)... } {};
+        Vector(T fill) { for (auto i = 0; i < N; ++i) data[i] = fill; }
 
         PA_DEFINE_COMPONENT_WISE_OPERATOR(Vector, N, +);
         PA_DEFINE_COMPONENT_WISE_OPERATOR(Vector, N, -);

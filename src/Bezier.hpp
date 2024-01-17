@@ -42,8 +42,8 @@ namespace PA
 		QuadraticBezier(const Vec& P0, const Vec& P1, const Vec& P2) : P0(P0), P1(P1), P2(P2) {}
 
 		auto GetPolynomialCoefficients() const -> StaticArray<Vec, 3>;
-
-		auto PointAt(Scalar t) const -> Vec;
+		auto GetBBox() const -> BBox;
+		auto EvaluateAt(Scalar t) const -> Vec;
 	};
 }
 
@@ -64,7 +64,14 @@ namespace PA
 
 
 	template<typename TF, U32 Dim>
-	inline auto QuadraticBezier<TF, Dim>::PointAt(Scalar t) const -> Vec
+	inline auto QuadraticBezier<TF, Dim>::GetBBox() const -> BBox
+	{
+		return BBox({ &P0, &P2 + 1 });
+	}
+
+
+	template<typename TF, U32 Dim>
+	inline auto QuadraticBezier<TF, Dim>::EvaluateAt(Scalar t) const -> Vec
 	{
 		return (Scalar(1) - t) * (Scalar(1) - t) * P0 + Scalar(2) (Scalar(1) - t) * t * P1 + t * t * P2;
 	}

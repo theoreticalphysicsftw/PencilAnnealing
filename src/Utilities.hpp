@@ -48,7 +48,16 @@ namespace PA
 	inline auto ClampedU8(T v) -> U8;
 
 	template <typename T>
-	inline auto Max(const T& v0, const T& v1);
+	inline auto Max(const T& v0, const T& v1) -> T;
+
+	template <typename T>
+	inline auto Min(const T& v0, const T& v1) -> T;
+
+	inline auto InterleaveBits(U16 n) -> U32;
+	inline auto DeinterleaveBits(U32 n) -> U16;
+	inline auto LebesgueCurve(U16 x, U16 y) -> U32;
+	inline auto LebesgueCurveInverse(U32 n) -> Pair<U16, U16>;
+	
 }
 
 
@@ -66,22 +75,26 @@ namespace PA
 		return U32(strlen(cstr));
 	}
 
+
 	template<typename T>
 	inline auto ToString(const T& v) -> Str
 	{
 		return std::to_string(v);
 	}
 
+
 	inline auto Terminate() -> V
 	{
 		std::abort();
 	}
+
 
 	template <typename TContainer>
 	inline auto Fill(TContainer& c, const typename TContainer::value_type& value) -> V
 	{
 		std::fill(c.begin(), c.end(), value);
 	}
+
 
 	template<typename T>
 		requires CIsArithmetic<T>
@@ -90,15 +103,56 @@ namespace PA
 		return U8(std::max(T(0), std::min(v, T(0xFF))));
 	}
 
+
 	template <typename T>
-	inline auto Max(const T& v0, const T& v1)
+	inline auto Max(const T& v0, const T& v1) -> T
 	{
 		return std::max(v0, v1);
 	}
 
+
 	template <typename T>
-	inline auto Min(const T& v0, const T& v1)
+	inline auto Min(const T& v0, const T& v1) -> T
 	{
 		return std::min(v0, v1);
+	}
+
+
+	auto InterleaveBits(U16 n) -> U32
+	{
+		U32 n32 = n;
+		n32 = (n32 | (n32 << 8)) & 0b00000000111111110000000011111111u;
+		n32 = (n32 | (n32 << 4)) & 0b00001111000011110000111100001111u;
+		n32 = (n32 | (n32 << 2)) & 0b00110011001100110011001100110011u;
+		n32 = (n32 | (n32 << 1)) & 0b01010101010101010101010101010101u;
+		return n32;
+	}
+
+	auto DeinterleaveBits(U32 n) -> U16
+	{
+		n = (n | (n >> 1)) & 0b00110011001100110011001100110011u;
+		n = (n | (n >> 2)) & 0b00001111000011110000111100001111u;
+		n = (n | (n >> 4)) & 0b00000000111111110000000011111111u;
+		n = (n | (n >> 8)) & 0b00000000000000001111111111111111u;
+		return U16(n);
+	}
+
+
+	inline auto LebesgueCurve(U16 x, U16 y) -> U32
+	{
+		auto r0 = InterleaveBits(x);
+		auto r1 = InterleaveBits(y);
+		return r0 | (r1 << 1u);
+	}
+
+
+	inline auto LebesgueCurveInverse(U32 n) -> Pair<U16, U16>
+	{
+		Pair<U16, U16> result;
+		auto x = n & 0b01010101010101010101010101010101u;
+		auto y = (n - x) >> 1;
+		result.first = DeinterleaveBits(x);
+		result.second = DeinterleaveBits(y);
+		return result;
 	}
 }
