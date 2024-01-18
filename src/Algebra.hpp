@@ -47,7 +47,7 @@ namespace PA
     template<typename TF>
     auto SolveCubic(TF a, TF b, TF c, TF d) -> StaticArray<TF, 3>
     {
-        static constexpr TF tolerance = TF(16) * Limits<TF>::epsilon();
+        static constexpr TF tolerance = TF(1) * Limits<TF>::epsilon();
         PA_ASSERT(a > tolerance);
         auto nan = Limits<TF>::quiet_NaN();
         StaticArray<TF, 3> roots =
@@ -56,16 +56,24 @@ namespace PA
             nan,
             nan
         };
-
+        b = b / a;
+        c = c / a;
+        d = d / a;
+        a = 1.f;
         // Transform into a depressed cubic.
-        auto aSq = a * a;
         auto bSq = b * b;
-        auto p = (TF(3) * a * c - bSq) / (TF(3) * aSq);
-        auto q = (TF(2) * b * bSq - TF(9) * a * b * c + TF(27) * aSq * d) / (TF(27) * aSq * a);
+        auto p = c - bSq / TF(3);
+        auto q = (TF(2) * b * bSq - TF(9) * b * c) / TF(27) + d;
 
-        auto discriminant = TF(-4) * p * p * p - TF(27) * q * q;
+        auto delta = p * p * p / TF(27) + q * q / TF(4);
 
-        if (Abs(discriminant) < tolerance)
+        if (delta > tolerance)
+        {
+            auto minusHalfQ = q / (-2.f);
+            auto sqrtDelta = Sqrt(delta);
+            roots[0] = Cbrt(minusHalfQ + sqrtDelta) + Cbrt(minusHalfQ - sqrtDelta);
+        }
+        else if (delta > -tolerance)
         {
             if (p > -tolerance && p < tolerance)
             {
@@ -94,9 +102,9 @@ namespace PA
         }
 
         // Now "undepress" the roots.
-        roots[0] = roots[0] - b / (TF(3) * a);
-        roots[1] = roots[1] - b / (TF(3) * a);
-        roots[2] = roots[2] - b / (TF(3) * a);
+        roots[0] = roots[0] - b / TF(3) ;
+        roots[1] = roots[1] - b / TF(3) ;
+        roots[2] = roots[2] - b / TF(3) ;
 
         return roots;
     }

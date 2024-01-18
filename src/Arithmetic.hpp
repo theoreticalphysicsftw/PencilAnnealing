@@ -44,6 +44,8 @@ namespace PA
     template <typename TF>
     inline auto Sqrt(TF n) -> TF;
     template <typename TF>
+    inline auto Cbrt(TF n) -> TF;
+    template <typename TF>
     inline auto Frac(TF n) -> TF;
     template <typename TF>
     inline auto Abs(TF n) -> TF;
@@ -101,6 +103,13 @@ namespace PA
     auto Sqrt(TF n) -> TF
     {
         return std::sqrt(n);
+    }
+
+
+    template<typename TF>
+    auto Cbrt(TF n) -> TF
+    {
+        return std::cbrt(n);
     }
 
 
