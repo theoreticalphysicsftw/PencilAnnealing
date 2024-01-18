@@ -2,6 +2,7 @@
 #include <Error.hpp>
 #include <Utilities.hpp>
 #include <Algebra.hpp>
+#include <Random.hpp>
 
 using namespace PA;
 
@@ -18,8 +19,8 @@ I32 main(I32 argc, const C** argv)
 		}
 	}
 
-	static constexpr U32 latticeSize = 400;
-	static constexpr F32 tolerance = 0.001;
+	static constexpr U32 latticeSize = 300;
+	static constexpr F32 tolerance = 0.01;
 	U32 rootsFound = 0;
 	for (auto i = 0; i < latticeSize; ++i)
 	{
@@ -29,7 +30,7 @@ I32 main(I32 argc, const C** argv)
 			{
 				for (auto l = 0; k < latticeSize; ++k)
 				{
-					auto a = -1.f + 2.f / latticeSize * i;
+					auto a = 0.5f + 0.5f / latticeSize * i;
 					auto b = -1.f + 2.f / latticeSize * j;
 					auto c = -1.f + 2.f / latticeSize * k;
 					auto d = -1.f + 2.f / latticeSize * l;

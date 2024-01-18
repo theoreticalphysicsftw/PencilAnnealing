@@ -42,6 +42,10 @@ namespace PA
     template <typename TF>
     inline auto Cos(TF a) -> TF;
     template <typename TF>
+    inline auto ArcTan2(TF y, TF x) -> TF;
+    template <typename TF>
+    inline auto Exp(TF a) -> TF;
+    template <typename TF>
     inline auto Sqrt(TF n) -> TF;
     template <typename TF>
     inline auto Cbrt(TF n) -> TF;
@@ -88,7 +92,7 @@ namespace PA
     template <typename TF>
     inline auto Sin(TF a) -> TF
     {
-        return std::asin(a);
+        return std::sin(a);
     }
 
 
@@ -96,6 +100,20 @@ namespace PA
     inline auto Cos(TF a) -> TF
     {
         return std::cos(a);
+    }
+
+
+    template<typename TF>
+    auto ArcTan2(TF y, TF x) -> TF
+    {
+        return std::atan2(y, x);
+    }
+
+
+    template<typename TF>
+    auto Exp(TF n) -> TF
+    {
+        return std::exp(n);
     }
 
 
@@ -131,7 +149,7 @@ namespace PA
     template<typename T>
     auto SmoothStep(T range0, T range1, T x) -> T
     {
-        x = Clamp((x - range0) / (range1 - range0), T(0), T(1));
+        x = Clamp((x - range0) / (range1 - range0), T(range0), T(range1));
         return x * x * (T(3) - T(2) * x);
     }
 

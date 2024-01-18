@@ -38,7 +38,7 @@ auto Test0() -> V
 auto Test1() -> V
 {
 	static constexpr U32 latticeSize = 10000;
-	static constexpr F32 tolerance = 5;
+	static constexpr F32 tolerance = 1;
 
 	QuadraticBezier<F32, 2> curve(Vec2(-1000, -1000), Vec2(0, 1000), Vec2(1000, -100));
 	for (auto i = 0; i < latticeSize; ++i)

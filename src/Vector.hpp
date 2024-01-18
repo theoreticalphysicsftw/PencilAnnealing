@@ -44,7 +44,7 @@ namespace PA
         Vector(Ts... elements) : data{ static_cast<T>(elements)... } {};
         Vector(T fill) { for (auto i = 0; i < N; ++i) data[i] = fill; }
 
-        T Dot(const Vector& other)
+        T Dot(const Vector& other) const
         {
             T sum = T(0);
             for (auto i = 0u; i < N; ++i)
@@ -52,6 +52,11 @@ namespace PA
                 sum += data[i] * other.data[i];
             }
             return sum;
+        }
+
+        T Length() const
+        {
+            return Sqrt(this->Dot(*this));
         }
 
         PA_DEFINE_COMPONENT_WISE_OPERATOR(Vector, N, +);

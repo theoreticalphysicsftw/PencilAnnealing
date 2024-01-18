@@ -39,6 +39,7 @@ I32 main(I32 argc, C** argv)
 	(
 		[&annealer]()
 		{
+			annealer.AnnealLine();
 			auto target = PresentSurface::LockScreenTarget();
 			annealer.CopyCurrentApproximationToColor((ColorU32*)target.data, target.stride);
 			PresentSurface::UnlockScreenTarget();

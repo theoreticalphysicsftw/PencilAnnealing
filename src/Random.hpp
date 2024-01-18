@@ -31,6 +31,8 @@ namespace PA
 
 	template <typename TF>
 	auto GetUniformFloat01() -> TF;
+
+	auto GetUniformU32(U32 range0, U32 range1) -> U32;
 }
 
 
@@ -40,6 +42,12 @@ namespace PA
 	auto GetUniformFloat01() -> TF
 	{
 		std::uniform_real_distribution<TF> dist(TF(0), TF(1));
+		return dist(GMerseneTwister);
+	}
+
+	inline auto GetUniformU32(U32 range0, U32 range1) -> U32
+	{
+		std::uniform_int_distribution<U32> dist(range0, range1);
 		return dist(GMerseneTwister);
 	}
 }
