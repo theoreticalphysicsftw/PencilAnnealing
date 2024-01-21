@@ -35,6 +35,8 @@ namespace PA
 		using Vec = Vector<TF, Dim>;
 		using BBox = BBox<TF, Dim>;
 
+		static constexpr U32 dimension = Dim;
+
 		union
 		{
 			struct

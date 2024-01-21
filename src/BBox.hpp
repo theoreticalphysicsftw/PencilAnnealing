@@ -34,10 +34,16 @@ namespace PA
 		using Vec = Vector<TF, Dim>;
 		using VecSpan = Span<const Vec>;
 
+		static constexpr U32 dimension = Dim;
+
 		Vec lower;
 		Vec upper;
 
 		BBox(VecSpan points);
+		BBox(Vec lower, Vec upper) : lower(lower), upper(upper) {}
+
+		auto Intersects(const BBox& other) -> B;
+		auto Contains(const Vec& p) -> B;
 	};
 }
 
@@ -57,5 +63,27 @@ namespace PA
 
 		lower = minTmp;
 		upper = maxTmp;
+	}
+
+
+	template<typename TF, U32 Dim>
+	inline auto BBox<TF, Dim>::Intersects(const BBox& other) -> B
+	{
+		auto upperLeft = Vec(other.lower[0], other.upper[1]);
+		auto lowerRight = Vec(other.upper[0], other.lower[1]);
+
+		if (Contains(upperLeft) || Contains(lowerRight) || Contains(other.lower) || Contains(lower.upper))
+		{
+			return true;
+		}
+
+		return false;
+	}
+
+
+	template<typename TF, U32 Dim>
+	inline auto BBox<TF, Dim>::Contains(const Vec& p) -> B
+	{
+		return p[0] >= lower[0] && p[0] <= upper[0] && p[1] >= lower[1] && p[1] <= upper[1];
 	}
 }

@@ -34,6 +34,7 @@ namespace PA
 		using Scalar = TF;
 		using Vec = Vector<TF, 2>;
 		using BBox = BBox<TF, 2>;
+		static constexpr U32 dimension = 2;
 
 		Vec center;
 		Scalar radius;

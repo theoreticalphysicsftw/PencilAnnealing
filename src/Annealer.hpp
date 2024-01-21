@@ -111,8 +111,8 @@ namespace PA
 			workingApproximation.data[i] = 255u;
 		}
 
-		this->maxStrokes = maxStrokes ? maxStrokes : 1 << 5;
-		this->maxSteps = maxSteps ? maxSteps : 1u << 10;
+		this->maxStrokes = maxStrokes ? maxStrokes : (1u << 8);
+		this->maxSteps = maxSteps ? maxSteps : (1u << 16);
 
 		optimalEnergy = GetEnergy(currentApproximation);
 
@@ -163,7 +163,7 @@ namespace PA
 	{
 		for (auto i = 0u; i < maxStrokes; ++i)
 		{
-			auto strokeLength = SmoothStep(TF(1) / grayscaleReference.width, TF(0.1), TF(0.1) * (1 - TF(i + 1) / maxStrokes));
+			auto strokeLength = SmoothStep(TF(4) / grayscaleReference.width, TF(0.2), TF(0.2) * (1 - TF(i + 1) / maxStrokes));
 			auto p0 = Vec2(GetUniformFloat01<TF>(), GetUniformFloat01<TF>());
 			auto angle = GetUniformFloat01<TF>() * Constants<TF>::C2Pi;
 			auto direction = Vec2(Cos(angle), Sin(angle)) * strokeLength;
@@ -463,8 +463,13 @@ namespace PA
 				ToScreenSpaceCoordinates(screenLine.points);
 				auto coords = LebesgueCurveInverse(i);
 				auto dist = screenLine.GetDistanceFrom(Vec(coords.first, coords.second));
-				auto val = SmoothStep(TF(0), TF(1), dist / 1.f);
+				auto val = SmoothStep(TF(0), TF(1), dist);
 				img.data[i] = ClampedU8(img.data[i] - (TF(255) - TF(255) * val));
+
+				if (img.data[i] != 255)
+				{
+					continue;
+				}
 			}
 		}
 
