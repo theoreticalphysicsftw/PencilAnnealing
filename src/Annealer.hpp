@@ -112,7 +112,7 @@ namespace PA
 			workingApproximation.data[i] = 255u;
 		}
 
-		this->maxStrokes = maxStrokes ? maxStrokes : (reference->width * reference->height / 64);
+		this->maxStrokes = maxStrokes ? maxStrokes : (reference->width * reference->height / 128u);
 		this->maxSteps = maxSteps ? maxSteps : (1u << 16);
 
 		optimalEnergy = GetEnergy(currentApproximation);
@@ -304,6 +304,7 @@ namespace PA
 		{
 			optimalEnergy = currentEnergy;
 			currentApproximation = workingApproximation;
+			Log("Energy lowered.");
 		}
 		else
 		{
@@ -470,25 +471,20 @@ namespace PA
 	inline auto Annealer<TF>::GetEnergy(const RawCPUImage& img, Pair<U32, U32> extent) -> TF
 	{
 		TF energy = 0;
+		auto extentSize = extent.second - extent.first;
 		for (auto i = extent.first; i < extent.second; ++i)
 		{
-			auto diff = grayscaleReference.data[i] - img.data[i];
-			energy += diff * diff;
+			auto diff = TF(grayscaleReference.data[i]) - TF(img.data[i]);
+			energy += diff * diff / extentSize;
 		}
-		return energy;
+		return Sqrt(energy);
 	}
 
 
 	template<typename TF>
 	inline auto Annealer<TF>::GetEnergy(const RawCPUImage& img) -> TF
 	{
-		TF energy = 0;
-		auto imgSize = img.height * img.width;
-		for (auto i = 0u; i < imgSize; ++i)
-		{
-			auto diff = grayscaleReference.data[i] - img.data[i];
-			energy += diff * diff;
-		}
-		return energy;
+		auto imgSize = img.width * img.height;
+		return GetEnergy(img, Pair<U32, U32>(0u, imgSize));
 	}
 }
