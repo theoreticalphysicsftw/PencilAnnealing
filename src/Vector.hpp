@@ -146,4 +146,10 @@ namespace PA
         }
         return result;
     }
+
+    template <typename TF, U32 N>
+    auto operator==(const Vector<TF, N>& v0, const Vector<TF, N>& v1) -> B
+    {
+        return v0.data == v1.data;
+    }
 }

@@ -20,42 +20,23 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+
 #pragma once
 
-#include <random>
+#include <algorithm>
 
 namespace PA
 {
-	inline static std::random_device GRandomSeed;
-	inline static std::mt19937 GMerseneTwister(GRandomSeed());
-
-	template <typename TF>
-	auto GetUniformFloat01() -> TF;
-
-	auto GetUniformU32(U32 range0, U32 range1) -> U32;
-	auto GetUniformBernoulli() -> B;
+	template <typename TInputIt, typename T>
+	auto Find(TInputIt first, TInputIt last, const T& v) -> TInputIt;
 }
 
 
 namespace PA
 {
-	template<typename TF>
-	auto GetUniformFloat01() -> TF
+	template<typename TInputIt, typename T>
+	auto Find(TInputIt first, TInputIt last, const T& v) -> TInputIt
 	{
-		std::uniform_real_distribution<TF> dist(TF(0), TF(1));
-		return dist(GMerseneTwister);
-	}
-
-	inline auto GetUniformU32(U32 range0, U32 range1) -> U32
-	{
-		std::uniform_int_distribution<U32> dist(range0, range1);
-		return dist(GMerseneTwister);
-	}
-
-	inline auto GetUniformBernoulli() -> B
-	{
-		std::bernoulli_distribution dist(0.5);
-
-		return dist(GMerseneTwister);
+		return std::find(first, last, v);
 	}
 }

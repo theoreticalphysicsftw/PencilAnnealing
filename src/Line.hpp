@@ -35,6 +35,8 @@ namespace PA
 		using Vec = Vector<TF, Dim>;
 		using BBox = BBox<TF, Dim>;
 
+		static constexpr U32 dimension = Dim;
+
 		union
 		{
 			struct
@@ -42,23 +44,32 @@ namespace PA
 				Vec p0;
 				Vec p1;
 			};
-			StaticArray<Vec, 3> points;
+			StaticArray<Vec, 2> points;
 		};
 
-		Line(const Vec& p0, const Vec& p1) : p0(p0), p1(p1) {}
+		auto operator==(const Line& other) -> B;
 
-		auto GetPolynomialCoefficients() const->StaticArray<Vec, 2>;
-		auto GetBBox() const->BBox;
-		auto EvaluateAt(Scalar t) const->Vec;
-		auto GetCentroid() const->Vec;
-		auto GetSquaredDistanceFrom(const Vec& p) const->TF;
-		auto GetDistanceFrom(const Vec& p) const->TF;
+		Line(const Vec& p0 = Vec(), const Vec& p1 = Vec()) : p0(p0), p1(p1) {}
+
+		auto GetPolynomialCoefficients() const -> StaticArray<Vec, 2>;
+		auto GetBBox() const -> BBox;
+		auto Intersects(const BBox& bBox) const -> B;
+		auto EvaluateAt(Scalar t) const -> Vec;
+		auto GetCentroid() const -> Vec;
+		auto GetSquaredDistanceFrom(const Vec& p) const -> TF;
+		auto GetDistanceFrom(const Vec& p) const -> TF;
 	};
 }
 
 
 namespace PA
 {
+	template<typename TF, U32 Dim>
+	inline auto Line<TF, Dim>::operator==(const Line& other) -> B
+	{
+		return points == other.points;
+	}
+
 	template<typename TF, U32 Dim>
 	inline auto Line<TF, Dim>::GetPolynomialCoefficients() const -> StaticArray<Vec, 2>
 	{
@@ -75,6 +86,13 @@ namespace PA
 	inline auto Line<TF, Dim>::GetBBox() const -> BBox
 	{
 		return BBox(points);
+	}
+
+
+	template<typename TF, U32 Dim>
+	inline auto Line<TF, Dim>::Intersects(const BBox& bBox) const -> B
+	{
+		return bBox.Contains(p0) || bBox.Contains(p1);
 	}
 
 

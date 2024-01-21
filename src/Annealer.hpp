@@ -26,6 +26,7 @@
 #include "Bezier.hpp"
 #include "Arc.hpp"
 #include "Line.hpp"
+#include "QuadTree.hpp"
 #include "Color.hpp"
 #include "Utilities.hpp"
 #include "Random.hpp"
@@ -54,14 +55,14 @@ namespace PA
 
 	private:
 		auto ToScreenSpaceCoordinates(Vec in) -> Vec;
+		auto ToWorldCoordinates(Vec inScreen) -> Vec;
 		auto ToScreenSpaceCoordinates(Span<Vec> in) -> V;
 
 		auto DrawBezierToSurface(const QuadraticBezier& b, RawCPUImage& img) -> Pair<U32, U32>;
 		auto DrawBezierToSurface(const Array<QuadraticBezier>& b, RawCPUImage& img) -> Pair<U32, U32>;
 		auto DrawArcToSurface(const Arc& a, RawCPUImage& img) -> Pair<U32, U32>;
 		auto DrawArcsToSurface(const Array<Arc>& a, RawCPUImage& img) -> Pair<U32, U32>;
-		auto DrawLineToSurface(const Line& a, RawCPUImage& img) -> Pair<U32, U32>;
-		auto DrawLinesToSurface(const Array<Line>& a, RawCPUImage& img) -> Pair<U32, U32>;
+		auto DrawLinesToSurface(const QuadTree<Line>& lines, RawCPUImage& img) -> Pair<U32, U32>;
 		auto ClearSurface(RawCPUImage& img);
 		auto RestoreSurfaceFrom(RawCPUImage& toRestore, const RawCPUImage& reference, Pair<U32, U32> extent);
 
@@ -74,8 +75,8 @@ namespace PA
 
 		Array<QuadraticBezier> strokes;
 		Array<Arc> arcStrokes;
-		Array<Line> lineStrokes;
-		
+		QuadTree<Line> lineStrokes;
+
 		U32 maxStrokes;
 		U32 maxSteps;
 
@@ -111,7 +112,7 @@ namespace PA
 			workingApproximation.data[i] = 255u;
 		}
 
-		this->maxStrokes = maxStrokes ? maxStrokes : (1u << 8);
+		this->maxStrokes = maxStrokes ? maxStrokes : (reference->width * reference->height / 64);
 		this->maxSteps = maxSteps ? maxSteps : (1u << 16);
 
 		optimalEnergy = GetEnergy(currentApproximation);
@@ -161,6 +162,7 @@ namespace PA
 	template<typename TF>
 	inline auto Annealer<TF>::InitLine() -> V
 	{
+		Array<Line> randomLines;
 		for (auto i = 0u; i < maxStrokes; ++i)
 		{
 			auto strokeLength = SmoothStep(TF(4) / grayscaleReference.width, TF(0.2), TF(0.2) * (1 - TF(i + 1) / maxStrokes));
@@ -169,8 +171,10 @@ namespace PA
 			auto direction = Vec2(Cos(angle), Sin(angle)) * strokeLength;
 			PA_ASSERT(direction.Length() <= 1);
 			auto p1 = p0 + direction;
-			lineStrokes.emplace_back(p0, p1);
+			randomLines.emplace_back(p0, p1);
 		}
+		lineStrokes.Build({randomLines.begin(), randomLines.end()});
+		Log("QuadTree built.");
 	}
 
 
@@ -274,11 +278,11 @@ namespace PA
 
 		temperature = TF(1) - TF(step) / maxSteps;
 
-		auto strokeIdx = GetUniformU32(0, lineStrokes.size() - 1);
 		auto preturbation = GetUniformFloat01<TF>() * temperature;
 		auto preturbationAngle = GetUniformFloat01<TF>() * Constants<TF>::C2Pi;
 
-		auto& line = lineStrokes[strokeIdx];
+		auto line = lineStrokes.GetRandomPrimitive();
+		auto oldLine = line;
 		auto centroid = line.GetCentroid();
 		line.p0 = line.p0 - centroid;
 		line.p1 = line.p1 - centroid;
@@ -289,8 +293,11 @@ namespace PA
 		line.p0 = line.p0 + centroid + preturbation;
 		line.p1 = line.p1 + centroid + preturbation;
 
+		lineStrokes.Remove(oldLine);
+		lineStrokes.Add(line);
 		ClearSurface(workingApproximation);
 		DrawLinesToSurface(lineStrokes, workingApproximation);
+		Log("Primitives rendered.");
 		auto currentEnergy = GetEnergy(workingApproximation);
 
 		if (currentEnergy < optimalEnergy || Exp((optimalEnergy - currentEnergy) / temperature) >= GetUniformFloat01<TF>())
@@ -300,12 +307,8 @@ namespace PA
 		}
 		else
 		{
-			line.p0 = line.p0 - centroid - preturbation;
-			line.p1 = line.p1 - centroid - preturbation;
-			line.p0 = invRotation * line.p0;
-			line.p1 = invRotation * line.p1;
-			line.p0 = line.p0 + centroid;
-			line.p1 = line.p1 + centroid;
+			lineStrokes.Remove(line);
+			lineStrokes.Add(oldLine);
 		}
 	}
 
@@ -316,6 +319,15 @@ namespace PA
 		Vec result;
 		result[0] = in[0] * (grayscaleReference.width - 1);
 		result[1] = (TF(1) - in[1]) * (grayscaleReference.height - 1);
+		return result;
+	}
+
+	template<typename TF>
+	inline auto Annealer<TF>::ToWorldCoordinates(Vec inScreen) -> Vec
+	{
+		Vec result;
+		result[0] = inScreen[0] / (grayscaleReference.width - 1);
+		result[1] = TF(1) - inScreen[1] / (grayscaleReference.height - 1);
 		return result;
 	}
 
@@ -411,64 +423,31 @@ namespace PA
 		}
 		return maxExtent;
 	}
-
-
-	template<typename TF>
-	inline auto Annealer<TF>::DrawLineToSurface(const Line& l, RawCPUImage& img) -> Pair<U32, U32>
-	{
-		auto bBox = l.GetBBox();
-		auto lowerLeft = ToScreenSpaceCoordinates(bBox.lower);
-		auto upperRight = ToScreenSpaceCoordinates(bBox.upper);
-		auto lowerRight = Vec(upperRight[0], lowerLeft[1]);
-		auto upperLeft = Vec(lowerLeft[0], upperRight[1]);
-		auto imgSize = img.width * img.height;
-		auto minIdx = Min(LebesgueCurve(upperLeft[0], upperLeft[1]), imgSize - 1);
-		auto maxIdx = Min(LebesgueCurve(lowerRight[0], lowerRight[1]), imgSize - 1);
-
-		auto screenLine = l;
-		ToScreenSpaceCoordinates(screenLine.points);
-
-		for (auto i = minIdx; i <= maxIdx; ++i)
-		{
-			auto coords = LebesgueCurveInverse(i);
-			auto dist = screenLine.GetDistanceFrom(Vec(coords.first, coords.second));
-			auto val = SmoothStep(TF(0), TF(1), dist / 1.f);
-			img.data[i] = ClampedU8(img.data[i] - (TF(255) - TF(255) * val));
-		}
-
-		return Pair<U32, U32>(minIdx, maxIdx);
-	}
 	
 
 	template<typename TF>
-	inline auto PA::Annealer<TF>::DrawLinesToSurface(const Array<Line>& lines, RawCPUImage& img) -> Pair<U32, U32>
+	inline auto PA::Annealer<TF>::DrawLinesToSurface(const QuadTree<Line>& lines, RawCPUImage& img) -> Pair<U32, U32>
 	{
-		/*
-		auto maxExtent = Pair<U32, U32>(0, 0);
-		for (auto& line : lines)
-		{
-			auto extent = DrawLineToSurface(line, img);
-			maxExtent.first = Max(maxExtent.first, extent.first);
-			maxExtent.second = Max(maxExtent.second, extent.second);
-		}
-		return maxExtent;
-		*/
-
 		auto imgSize = img.width * img.height;
 		for (auto i = 0; i < imgSize; ++i)
 		{
-			for (auto& l : lines)
+			auto coords = LebesgueCurveInverse(i);
+			auto floatCoords = Vec(coords.first + 0.5, coords.second + 0.5);
+			auto worldCoords = ToWorldCoordinates(floatCoords);
+			auto nearLines = lines.GetPrimitivesAround(worldCoords);
+
+			for (auto& l : nearLines)
 			{
 				auto screenLine = l;
 				ToScreenSpaceCoordinates(screenLine.points);
-				auto coords = LebesgueCurveInverse(i);
-				auto dist = screenLine.GetDistanceFrom(Vec(coords.first, coords.second));
+
+				auto dist = screenLine.GetDistanceFrom(floatCoords);
 				auto val = SmoothStep(TF(0), TF(1), dist);
 				img.data[i] = ClampedU8(img.data[i] - (TF(255) - TF(255) * val));
 
-				if (img.data[i] != 255)
+				if (img.data[i] == 0)
 				{
-					continue;
+					break;
 				}
 			}
 		}
