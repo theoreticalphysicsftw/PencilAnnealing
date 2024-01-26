@@ -40,6 +40,13 @@
 #include <utility>
 #include <type_traits>
 
+#include <thread>
+#include <mutex>
+#include <future>
+#include <semaphore>
+
+#include <memory>
+
 namespace PA
 {
     using U8 = uint8_t;
@@ -90,6 +97,12 @@ namespace PA
     template <typename T>
     using Function = std::function<T>;
 
+    template<typename TF, typename... TArgs >
+    using InvokeResult = std::invoke_result_t<TF, TArgs...>;
+
+    template <typename TF, typename... TArgs>
+    constexpr auto& Invoke = std::invoke<TF, TArgs...>;
+
     template <typename... Ts>
     using Variant = std::variant<Ts...>;
 
@@ -101,6 +114,9 @@ namespace PA
 
     template <typename T>
     using RemoveReference = std::remove_reference_t<T>;
+
+    template <typename T, typename U>
+    constexpr auto IsSameType = std::is_same<T, U>::value;
 
     template <typename T>
     [[nodiscard]]
@@ -115,4 +131,32 @@ namespace PA
     {
         return std::forward<T>(t);
     }
+
+    template <typename T>
+    typename RemoveReference<T> Move(T&& t)
+    {
+        return std::move(t);
+    }
+
+    using Thread = std::jthread;
+    using Mutex = std::mutex;
+
+    template <typename T>
+    using ScopedLock = std::scoped_lock<T>;
+
+    template <typename T>
+    using Future = std::future<T>;
+    
+    template <typename T>
+    using Promise = std::promise<T>;
+
+    using Semaphore = std::counting_semaphore<>;
+
+    constexpr auto& GetLogicalCPUCount = std::thread::hardware_concurrency;
+
+    template <typename T>
+    using SharedPtr = std::shared_ptr<T>;
+
+    template <typename T>
+    constexpr auto MakeShared = std::make_shared<T>;
 }

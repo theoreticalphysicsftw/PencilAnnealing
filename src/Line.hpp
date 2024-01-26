@@ -92,7 +92,7 @@ namespace PA
 	template<typename TF, U32 Dim>
 	inline auto Line<TF, Dim>::Intersects(const BBox& bBox) const -> B
 	{
-		return bBox.Contains(p0) || bBox.Contains(p1);
+		return GetBBox().Intersects(bBox);
 	}
 
 

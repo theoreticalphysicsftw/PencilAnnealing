@@ -21,33 +21,58 @@
 // SOFTWARE.
 
 
+#pragma once
+
 #include "Types.hpp"
-#include "Utilities.hpp"
-#include "PresentSurface.hpp"
-#include "EmbeddedTestImage.hpp"
-#include "Webp.hpp"
-#include "Annealer.hpp"
 
-using namespace PA;
+#include <cstdio>
 
-I32 main(I32 argc, C** argv)
+namespace PA
 {
-	auto rawImage = DecodeWebP(GEmbeddedSmallTestImageData, CEmbeddedSmallTestImageSize);
-	PA_ASSERT(PresentSurface::Init(rawImage.width, rawImage.height));
-	Annealer<F32> annealer(&rawImage);
+	inline auto ReadWholeFile(const Str& path, Array<Byte> data) -> B;
+	inline auto WriteWholeFile(const Str& path, Span<const Byte> data) -> B;
+}
 
-	Thread annealingThread([&]() { while(annealer.AnnealLine()); });
 
-	PresentSurface::AddRenderingCode
-	(
-		[&annealer]()
-		{
-			auto target = PresentSurface::LockScreenTarget();
-			annealer.CopyCurrentApproximationToColor((ColorU32*)target.data, target.stride);
-			PresentSurface::UnlockScreenTarget();
-		}
-	);
+namespace PA
+{
+	auto ReadWholeFile(const Str& path, Array<Byte> data) -> B
+	{
+        auto handle = fopen(path.c_str(), "rb");
 
-	PresentSurface::PresentLoop();
-	return 0;
+        if (!handle)
+        {
+            return false;
+        }
+
+        fseek(handle, 0, SEEK_END);
+        auto size = ftell(handle);
+        fseek(handle, 0, SEEK_SET);
+
+        data.resize(size);
+
+        if (fread(data.data(), size, 1, handle) < 1)
+        {
+            return false;
+        }
+
+        return true;
+	}
+
+	auto WriteWholeFile(const Str& path, Span<const Byte> data) -> B
+	{
+        auto handle = fopen(path.c_str(), "wb");
+
+        if (!handle)
+        {
+            return false;
+        }
+
+        if (fwrite(data.data(), data.size(), 1, handle) < 1)
+        {
+            return false;
+        }
+
+        return true;
+	}
 }

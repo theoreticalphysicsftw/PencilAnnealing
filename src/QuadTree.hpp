@@ -52,6 +52,8 @@ namespace PA
 		auto Add(const TPrimitive& prim) -> V;
 		auto GetPrimitivesAround(const Vec& p) const -> Span<const TPrimitive>;
 		auto GetRandomPrimitive() -> TPrimitive;
+		auto Bounds(const TPrimitive& prim) -> B;
+		auto GetSerializedPrimitives() -> Array<TPrimitive>;
 
 	private:
 		auto BuildRecursive(const Array<TPrimitive>& primitives, const BBox& bBox) -> Node*;
@@ -61,6 +63,7 @@ namespace PA
 		BBox globalBBox = BBox(Vec(0), Vec(1));
 		Array<Node*> leaves;
 	};
+
 }
 
 
@@ -75,31 +78,54 @@ namespace PA
 
 
 	template<typename TPrimitive>
+	inline auto QuadTree<TPrimitive>::Bounds(const TPrimitive& prim) -> B
+	{
+		return globalBBox.Contains(prim);
+	}
+
+
+	template<typename TPrimitive>
+	inline auto QuadTree<TPrimitive>::GetSerializedPrimitives() -> Array<TPrimitive>
+	{
+		Array<TPrimitive> result;
+		for (auto leafPtr : leaves)
+		{
+			if (!leafPtr->primitives.empty())
+			{
+				result.insert(result.end(), leafPtr->primitives.begin(), leafPtr->primitives.end());
+			}
+		}
+		return result;
+	}
+
+
+	template<typename TPrimitive>
 	inline auto QuadTree<TPrimitive>::Remove(const TPrimitive& prim) -> V
 	{
-		Array<Node*> toVisit;
-		toVisit.push_back(root);
+		Array<Pair<Node*, BBox>> toVisit;
+		toVisit.emplace_back(root, globalBBox);
 
 		while (!toVisit.empty())
 		{
-			auto currentNode = toVisit.back();
+			auto currentLevel = toVisit.back();
 			toVisit.pop_back();
 
-			if (currentNode->isLeaf)
+			if (currentLevel.first->isLeaf)
 			{
-				auto found = Find(currentNode->primitives.begin(), currentNode->primitives.end(), prim);
-				if (found != currentNode->primitives.end())
+				auto found = Find(currentLevel.first->primitives.begin(), currentLevel.first->primitives.end(), prim);
+				if (found != currentLevel.first->primitives.end())
 				{
-					currentNode->primitives.erase(found);
+					currentLevel.first->primitives.erase(found);
 				}
 			}
 			else
 			{
+				auto descendantBBoxes = GetDescendantBBoxes(currentLevel.second);
 				for (auto i = 0; i < 4; ++i)
 				{
-					if (currentNode->descendants[i])
+					if (currentLevel.first->descendants[i] && prim.Intersects(descendantBBoxes[i]))
 					{
-						toVisit.push_back(currentNode->descendants[i]);
+						toVisit.emplace_back(currentLevel.first->descendants[i], descendantBBoxes[i]);
 					}
 				}
 			}
@@ -120,18 +146,22 @@ namespace PA
 
 			if (currentLevel.first->isLeaf)
 			{
-				if (prim.Intersects(currentLevel.second))
-				{
-					currentLevel .first->primitives.push_back(prim);
-				}
+				currentLevel.first->primitives.push_back(prim);
 			}
 			else
 			{
 				auto descendantBBoxes = GetDescendantBBoxes(currentLevel.second);
 				for (auto i = 0; i < 4; ++i)
 				{
-					if (currentLevel.first->descendants[i] && prim.Intersects(descendantBBoxes[i]))
+					if (prim.Intersects(descendantBBoxes[i]))
 					{
+						if (!currentLevel.first->descendants[i])
+						{
+							auto newNode = new Node;
+							newNode->isLeaf = true;
+							leaves.push_back(newNode);
+							currentLevel.first->descendants[i] = newNode;
+						}
 						toVisit.emplace_back(currentLevel.first->descendants[i], descendantBBoxes[i]);
 					}
 				}

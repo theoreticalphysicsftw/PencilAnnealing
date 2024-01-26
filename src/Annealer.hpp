@@ -30,6 +30,8 @@
 #include "Color.hpp"
 #include "Utilities.hpp"
 #include "Random.hpp"
+#include "File.hpp"
+#include "ThreadPool.hpp"
 
 namespace PA
 {
@@ -48,10 +50,11 @@ namespace PA
 		RawCPUImage workingApproximation;
 
 		Annealer(const RawCPUImage* referance, U32 maxStrokes = 0, U32 maxSteps = 0);
+		~Annealer();
 		auto CopyCurrentApproximationToColor(ColorU32* data, U32 stride) -> V;
 		auto AnnealBezier() -> V;
 		auto AnnealArc() -> V;
-		auto AnnealLine() -> V;
+		auto AnnealLine() -> B;
 
 	private:
 		auto ToScreenSpaceCoordinates(Vec in) -> Vec;
@@ -80,9 +83,12 @@ namespace PA
 		U32 maxStrokes;
 		U32 maxSteps;
 
-		Scalar temperature = TF(1);
+		Scalar temperature;
+		Scalar maxTemperature;
 		Scalar optimalEnergy;
 		U32 step = 0;
+
+		ThreadPool<> threadPool;
 	};
 }
 
@@ -112,8 +118,10 @@ namespace PA
 			workingApproximation.data[i] = 255u;
 		}
 
-		this->maxStrokes = maxStrokes ? maxStrokes : (reference->width * reference->height / 128u);
-		this->maxSteps = maxSteps ? maxSteps : (1u << 16);
+		this->maxStrokes = maxStrokes ? maxStrokes : (reference->width * reference->height / 16);
+		this->maxSteps = maxSteps ? maxSteps : (1u << 20);
+		this->maxTemperature = 255 * 255;
+		temperature = maxTemperature;
 
 		optimalEnergy = GetEnergy(currentApproximation);
 
@@ -122,6 +130,12 @@ namespace PA
 		InitLine();
 	}
 
+	template<typename TF>
+	inline Annealer<TF>::~Annealer()
+	{
+		auto primitives = lineStrokes.GetSerializedPrimitives();
+		WriteWholeFile("out.pa", { (const Byte*)primitives.data(), primitives.size() });
+	}
 
 	template<typename TF>
 	inline auto Annealer<TF>::InitBezier() -> V
@@ -210,7 +224,7 @@ namespace PA
 			return;
 		}
 
-		temperature = TF(1) - TF(step) / maxSteps;
+		temperature = temperature * TF(0.9999);
 
 		auto pointPreturbation = Vec(GetUniformFloat01<TF>(), GetUniformFloat01<TF>());
 		auto pointIdx = GetUniformU32(0, 2);
@@ -269,48 +283,69 @@ namespace PA
 	}
 
 	template<typename TF>
-	inline auto Annealer<TF>::AnnealLine() -> V
+	inline auto Annealer<TF>::AnnealLine() -> B
 	{
 		if (step >= maxSteps)
 		{
-			return;
+			return false;
 		}
 
-		temperature = TF(1) - TF(step) / maxSteps;
+		temperature = temperature * TF(0.99);
 
-		auto preturbation = GetUniformFloat01<TF>() * temperature;
-		auto preturbationAngle = GetUniformFloat01<TF>() * Constants<TF>::C2Pi;
 
 		auto line = lineStrokes.GetRandomPrimitive();
 		auto oldLine = line;
-		auto centroid = line.GetCentroid();
-		line.p0 = line.p0 - centroid;
-		line.p1 = line.p1 - centroid;
-		auto rotation = CreateRotation<TF>(preturbationAngle);
-		auto invRotation = CreateRotation<TF>(-preturbationAngle);
-		line.p0 = rotation * line.p0;
-		line.p1 = rotation * line.p1;
-		line.p0 = line.p0 + centroid + preturbation;
-		line.p1 = line.p1 + centroid + preturbation;
+		B appropriatePreturbation = false;
+		BBox field(Vec(0, 0), Vec(1, 1));
+		while (!appropriatePreturbation)
+		{
+			auto preturbationScale0 = GetUniformFloat01<TF>();
+			auto preturbationScale1 = GetUniformFloat01<TF>();
+			auto preturbationAngle0 = GetUniformFloat01<TF>() * Constants<TF>::C2Pi;
+			auto preturbationAngle1 = GetUniformFloat01<TF>() * Constants<TF>::C2Pi;
+			auto preturbationDirection0 = preturbationScale0 + Vec(Sin(preturbationAngle0), Cos(preturbationAngle0));
+			auto preturbationDirection1 = preturbationScale1 + Vec(Sin(preturbationAngle1), Cos(preturbationAngle1));
+			line.p0 = line.p0 + preturbationDirection0;
+			line.p1 = line.p1 + preturbationDirection1;
+
+			if (field.Contains(line))
+			{
+				appropriatePreturbation = true;
+			}
+			else
+			{
+				line = oldLine;
+			}
+		}
+
 
 		lineStrokes.Remove(oldLine);
 		lineStrokes.Add(line);
 		ClearSurface(workingApproximation);
 		DrawLinesToSurface(lineStrokes, workingApproximation);
-		Log("Primitives rendered.");
 		auto currentEnergy = GetEnergy(workingApproximation);
 
-		if (currentEnergy < optimalEnergy || Exp((optimalEnergy - currentEnergy) / temperature) >= GetUniformFloat01<TF>())
+		auto transitionThreshold = Exp((optimalEnergy - currentEnergy) / temperature);
+
+		if (currentEnergy < optimalEnergy || transitionThreshold >= GetUniformFloat01<TF>())
 		{
 			optimalEnergy = currentEnergy;
 			currentApproximation = workingApproximation;
-			Log("Energy lowered.");
 		}
 		else
 		{
 			lineStrokes.Remove(line);
 			lineStrokes.Add(oldLine);
 		}
+		step++;
+
+		static constexpr U32 logAfterSteps = 128;
+		if (!(step % logAfterSteps))
+		{
+			Log("Energy = ", optimalEnergy, " Temperature = ", temperature);
+		}
+
+		return true;
 	}
 
 
@@ -430,27 +465,49 @@ namespace PA
 	inline auto PA::Annealer<TF>::DrawLinesToSurface(const QuadTree<Line>& lines, RawCPUImage& img) -> Pair<U32, U32>
 	{
 		auto imgSize = img.width * img.height;
-		for (auto i = 0; i < imgSize; ++i)
+
+		auto taskCount = GetLogicalCPUCount();
+		auto pixelsPerTask = imgSize / taskCount;
+
+		auto task =
+		[&](U32 start, U32 end)
 		{
-			auto coords = LebesgueCurveInverse(i);
-			auto floatCoords = Vec(coords.first + 0.5, coords.second + 0.5);
-			auto worldCoords = ToWorldCoordinates(floatCoords);
-			auto nearLines = lines.GetPrimitivesAround(worldCoords);
-
-			for (auto& l : nearLines)
+			for (auto i = start; i < end; ++i)
 			{
-				auto screenLine = l;
-				ToScreenSpaceCoordinates(screenLine.points);
+				auto coords = LebesgueCurveInverse(i);
+				auto floatCoords = Vec(coords.first + 0.5, coords.second + 0.5);
+				auto worldCoords = ToWorldCoordinates(floatCoords);
+				auto nearLines = lines.GetPrimitivesAround(worldCoords);
 
-				auto dist = screenLine.GetDistanceFrom(floatCoords);
-				auto val = SmoothStep(TF(0), TF(1), dist);
-				img.data[i] = ClampedU8(img.data[i] - (TF(255) - TF(255) * val));
-
-				if (img.data[i] == 0)
+				for (auto& l : nearLines)
 				{
-					break;
+					auto screenLine = l;
+					ToScreenSpaceCoordinates(screenLine.points);
+
+					auto dist = screenLine.GetDistanceFrom(floatCoords);
+					auto val = SmoothStep(TF(0), TF(1), dist);
+					img.data[i] = ClampedU8(img.data[i] - (TF(255) - TF(255) * val));
+
+					if (img.data[i] == 0)
+					{
+						break;
+					}
 				}
 			}
+		};
+
+		Array<TaskResult<V>> results;
+		for (auto i = 0u; i < taskCount; ++i)
+		{
+			results.emplace_back(threadPool.AddTask(task, i * pixelsPerTask, (i + 1) * pixelsPerTask));
+		}
+
+		// Remainder
+		task(taskCount * pixelsPerTask, imgSize);
+
+		for (auto& result : results)
+		{
+			result.Retrieve();
 		}
 
 		return Pair<U32, U32>(0, imgSize);
@@ -470,14 +527,39 @@ namespace PA
 	template<typename TF>
 	inline auto Annealer<TF>::GetEnergy(const RawCPUImage& img, Pair<U32, U32> extent) -> TF
 	{
-		TF energy = 0;
+
 		auto extentSize = extent.second - extent.first;
-		for (auto i = extent.first; i < extent.second; ++i)
+		auto taskCount = GetLogicalCPUCount();
+		auto pixelsPerTask = extentSize / taskCount;
+
+		auto task =
+		[&](U32 start, U32 end) -> TF
 		{
-			auto diff = TF(grayscaleReference.data[i]) - TF(img.data[i]);
-			energy += diff * diff / extentSize;
+			TF energy = 0;
+			for (auto i = start; i < end; ++i)
+			{
+				auto diff = TF(grayscaleReference.data[i]) - TF(img.data[i]);
+				energy += (diff * diff) / extentSize;
+			}
+			return energy;
+		};
+
+		Array<TaskResult<TF>> results;
+		for (auto i = 0u; i < taskCount; ++i)
+		{
+			results.emplace_back(threadPool.AddTask(task, extent.first + i * pixelsPerTask, extent.first + (i + 1) * pixelsPerTask));
 		}
-		return Sqrt(energy);
+
+		// Remainder
+		task(extent.first + pixelsPerTask * taskCount, extent.second);
+
+		TF energy = 0;
+		for (auto& result : results)
+		{
+			energy += result.Retrieve();
+		}
+
+		return energy;
 	}
 
 

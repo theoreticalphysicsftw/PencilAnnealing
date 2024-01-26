@@ -44,7 +44,9 @@ namespace PA
     template <typename TF>
     inline auto ArcTan2(TF y, TF x) -> TF;
     template <typename TF>
-    inline auto Exp(TF a) -> TF;
+    inline auto Exp(TF n) -> TF;
+    template <typename TF>
+    inline auto Logarithm(TF n) -> TF;
     template <typename TF>
     inline auto Sqrt(TF n) -> TF;
     template <typename TF>
@@ -114,6 +116,13 @@ namespace PA
     auto Exp(TF n) -> TF
     {
         return std::exp(n);
+    }
+
+
+    template<typename TF>
+    auto Logarithm(TF n) -> TF
+    {
+        return std::log(n);
     }
 
 

@@ -46,6 +46,9 @@ namespace PA
 
 		auto Intersects(const BBox& other) const -> B;
 		auto Contains(const Vec& p) const -> B;
+		auto Contains(const BBox& other) const -> B;
+		template <typename TPrimitive>
+		auto Contains(const TPrimitive& prim) const -> B;
 	};
 
 }
@@ -88,6 +91,14 @@ namespace PA
 
 
 	template<typename TF, U32 Dim>
+	template<typename TPrimitive>
+	inline auto BBox<TF, Dim>::Contains(const TPrimitive& prim) const -> B
+	{
+		return Contains(prim.GetBBox());
+	}
+
+
+	template<typename TF, U32 Dim>
 	inline auto BBox<TF, Dim>::Intersects(const BBox& other) const -> B
 	{
 		auto upperLeft = Vec(other.lower[0], other.upper[1]);
@@ -118,5 +129,12 @@ namespace PA
 	inline auto BBox<TF, Dim>::Contains(const Vec& p) const -> B
 	{
 		return p[0] >= lower[0] && p[0] <= upper[0] && p[1] >= lower[1] && p[1] <= upper[1];
+	}
+
+
+	template<typename TF, U32 Dim>
+	inline auto BBox<TF, Dim>::Contains(const BBox& other) const -> B
+	{
+		return Contains(other.lower) && Contains(other.upper);
 	}
 }
