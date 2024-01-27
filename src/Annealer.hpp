@@ -32,6 +32,7 @@
 #include "Random.hpp"
 #include "File.hpp"
 #include "ThreadPool.hpp"
+#include "Convolution.hpp"
 
 namespace PA
 {
@@ -45,16 +46,15 @@ namespace PA
 		using Arc = Arc<Scalar>;
 		using Line = Line<Scalar, 2>;
 
-		RawCPUImage grayscaleReference;
-		RawCPUImage currentApproximation;
-		RawCPUImage workingApproximation;
-
 		Annealer(const RawCPUImage* referance, U32 maxStrokes = 0, U32 maxSteps = 0);
 		~Annealer();
 		auto CopyCurrentApproximationToColor(ColorU32* data, U32 stride) -> V;
 		auto AnnealBezier() -> V;
 		auto AnnealArc() -> V;
 		auto AnnealLine() -> B;
+
+		auto ClearSurface(RawCPUImage& img) -> V;
+		auto DrawLinesToSurface(const QuadTree<Line>& lines, RawCPUImage& img) -> Pair<U32, U32>;
 
 	private:
 		auto ToScreenSpaceCoordinates(Vec in) -> Vec;
@@ -65,8 +65,6 @@ namespace PA
 		auto DrawBezierToSurface(const Array<QuadraticBezier>& b, RawCPUImage& img) -> Pair<U32, U32>;
 		auto DrawArcToSurface(const Arc& a, RawCPUImage& img) -> Pair<U32, U32>;
 		auto DrawArcsToSurface(const Array<Arc>& a, RawCPUImage& img) -> Pair<U32, U32>;
-		auto DrawLinesToSurface(const QuadTree<Line>& lines, RawCPUImage& img) -> Pair<U32, U32>;
-		auto ClearSurface(RawCPUImage& img);
 		auto RestoreSurfaceFrom(RawCPUImage& toRestore, const RawCPUImage& reference, Pair<U32, U32> extent);
 
 		auto GetEnergy(const RawCPUImage& img0, Pair<U32, U32> extent) -> TF;
@@ -75,6 +73,12 @@ namespace PA
 		auto InitBezier() -> V;
 		auto InitArc() -> V;
 		auto InitLine() -> V;
+
+		RawCPUImage grayscaleReference;
+		RawCPUImage grayscaleBlurredReference;
+		RawCPUImage grayscaleReferenceEdges;
+		RawCPUImage currentApproximation;
+		RawCPUImage workingApproximation;
 
 		Array<QuadraticBezier> strokes;
 		Array<Arc> arcStrokes;
@@ -100,6 +104,7 @@ namespace PA
 		grayscaleReference(reference->width, reference->height, EFormat::A8, true),
 		currentApproximation(reference->width, reference->height, EFormat::A8, true),
 		workingApproximation(reference->width, reference->height, EFormat::A8, true)
+
 	{
 		for (auto i = 0u; i < reference->width; ++i)
 		{
@@ -117,6 +122,8 @@ namespace PA
 			currentApproximation.data[i] = 255u;
 			workingApproximation.data[i] = 255u;
 		}
+
+		grayscaleReferenceEdges = GradientMagnitude(threadPool, grayscaleReference);
 
 		this->maxStrokes = maxStrokes ? maxStrokes : (reference->width * reference->height / 16);
 		this->maxSteps = maxSteps ? maxSteps : (1u << 20);
@@ -193,12 +200,35 @@ namespace PA
 
 
 	template<typename TF>
-	inline auto Annealer<TF>::ClearSurface(RawCPUImage& img)
+	inline auto Annealer<TF>::ClearSurface(RawCPUImage& img) -> V
 	{
-		for (auto i = 0u; i < img.data.size(); ++i)
+		auto imgSize = img.height * img.width;
+		auto taskCount = GetLogicalCPUCount();
+		auto pixelsPerTask = imgSize / taskCount;
+
+		auto task =
+		[&](U32 start, U32 end)
 		{
-			img.data[i] = 255u;
+			for (auto i = start; i < end; ++i)
+			{
+				img.data[i] = 255u;
+			}
+		};
+
+		Array<TaskResult<V>> results;
+		for (auto i = 0u; i < taskCount; ++i)
+		{
+			results.emplace_back(threadPool.AddTask(task, i * pixelsPerTask, (i + 1) * pixelsPerTask));
 		}
+
+		// Remainder
+		task(pixelsPerTask * taskCount, imgSize);
+
+		for (auto& result : results)
+		{
+			result.Retrieve();
+		}
+
 	}
 
 
@@ -287,26 +317,26 @@ namespace PA
 	{
 		if (step >= maxSteps)
 		{
+			Log("Annealing done.");
 			return false;
 		}
 
-		temperature = temperature * TF(0.99);
+		static constexpr U32 logAfterSteps = 128;
 
+		temperature = temperature * TF(0.999);
 
 		auto line = lineStrokes.GetRandomPrimitive();
 		auto oldLine = line;
+		auto oldLength = Distance(oldLine.p0, oldLine.p1);
 		B appropriatePreturbation = false;
 		BBox field(Vec(0, 0), Vec(1, 1));
 		while (!appropriatePreturbation)
 		{
-			auto preturbationScale0 = GetUniformFloat01<TF>();
-			auto preturbationScale1 = GetUniformFloat01<TF>();
-			auto preturbationAngle0 = GetUniformFloat01<TF>() * Constants<TF>::C2Pi;
-			auto preturbationAngle1 = GetUniformFloat01<TF>() * Constants<TF>::C2Pi;
-			auto preturbationDirection0 = preturbationScale0 + Vec(Sin(preturbationAngle0), Cos(preturbationAngle0));
-			auto preturbationDirection1 = preturbationScale1 + Vec(Sin(preturbationAngle1), Cos(preturbationAngle1));
-			line.p0 = line.p0 + preturbationDirection0;
-			line.p1 = line.p1 + preturbationDirection1;
+			auto newAngle = GetUniformFloat01<TF>() * Constants<TF>::C2Pi;
+			auto newDirection = Vec(Sin(newAngle), Cos(newAngle)) * oldLength;
+			auto newStart = Vec(GetUniformFloat01<TF>(), GetUniformFloat01<TF>());
+			line.p0 = newStart;
+			line.p1 = newStart + newDirection;
 
 			if (field.Contains(line))
 			{
@@ -330,7 +360,10 @@ namespace PA
 		if (currentEnergy < optimalEnergy || transitionThreshold >= GetUniformFloat01<TF>())
 		{
 			optimalEnergy = currentEnergy;
-			currentApproximation = workingApproximation;
+			if (!(step % logAfterSteps) || step == maxSteps - 1)
+			{
+				currentApproximation = workingApproximation;
+			}
 		}
 		else
 		{
@@ -339,7 +372,7 @@ namespace PA
 		}
 		step++;
 
-		static constexpr U32 logAfterSteps = 128;
+
 		if (!(step % logAfterSteps))
 		{
 			Log("Energy = ", optimalEnergy, " Temperature = ", temperature);
@@ -527,7 +560,6 @@ namespace PA
 	template<typename TF>
 	inline auto Annealer<TF>::GetEnergy(const RawCPUImage& img, Pair<U32, U32> extent) -> TF
 	{
-
 		auto extentSize = extent.second - extent.first;
 		auto taskCount = GetLogicalCPUCount();
 		auto pixelsPerTask = extentSize / taskCount;
@@ -539,7 +571,13 @@ namespace PA
 			for (auto i = start; i < end; ++i)
 			{
 				auto diff = TF(grayscaleReference.data[i]) - TF(img.data[i]);
-				energy += (diff * diff) / extentSize;
+				energy += 0.2 * (diff * diff) / extentSize;
+			}
+
+			for (auto i = start; i < end; ++i)
+			{
+				auto diff = TF(grayscaleReferenceEdges.data[i]) - TF(img.data[i]);
+				energy += 0.8 * (diff * diff) / extentSize;
 			}
 			return energy;
 		};

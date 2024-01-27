@@ -118,6 +118,9 @@ namespace PA
     template <typename T, typename U>
     constexpr auto IsSameType = std::is_same<T, U>::value;
 
+    template <B Condition, typename T, typename F>
+    using Conditional = std::conditional_t<Condition, T, F>;
+
     template <typename T>
     [[nodiscard]]
     constexpr T&& Forward(RemoveReference<T>&& t) noexcept

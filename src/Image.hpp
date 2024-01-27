@@ -30,6 +30,7 @@ namespace PA
 	enum class EFormat
 	{
 		A8 = 0,
+		A32Float,
 		RGBA8,
 		RGBA32,
 		RGBA32Float,
@@ -68,6 +69,7 @@ namespace PA
 		static constexpr U32 sizeTable[] =
 		{
 			1,
+			4,
 			4,
 			16,
 			16,

@@ -45,6 +45,8 @@ namespace PA
 		template <typename TFunc, typename... TArgs>
 		auto AddTask(TFunc f, TArgs... args) -> TaskResult<InvokeResult<TFunc, TArgs...>>;
 
+		auto GetMaxTasks() -> U32;
+
 	private:
 		Mutex queueMutex;
 		Deque<Task> queue;
@@ -87,6 +89,13 @@ namespace PA
 				}
 			);
 		}
+	}
+
+
+	template<typename TTask>
+	inline auto ThreadPool<TTask>::GetMaxTasks() -> U32
+	{
+		return threads.size();
 	}
 
 
