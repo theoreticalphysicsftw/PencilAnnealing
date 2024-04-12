@@ -29,14 +29,14 @@
 
 namespace PA
 {
-	inline auto ReadWholeFile(const Str& path, Array<Byte> data) -> B;
+	inline auto ReadWholeFile(const Str& path, Array<Byte>& data) -> B;
 	inline auto WriteWholeFile(const Str& path, Span<const Byte> data) -> B;
 }
 
 
 namespace PA
 {
-	auto ReadWholeFile(const Str& path, Array<Byte> data) -> B
+	auto ReadWholeFile(const Str& path, Array<Byte>& data) -> B
 	{
         auto handle = fopen(path.c_str(), "rb");
 

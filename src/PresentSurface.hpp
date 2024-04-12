@@ -55,6 +55,7 @@ namespace PA
 
         static auto LockScreenTarget() -> LockedTexture;
         static auto UnlockScreenTarget() -> V;
+        static auto IsClosed() -> B;
 
     private:
         static auto PresentLoopIteration() -> V;
@@ -68,7 +69,7 @@ namespace PA
 
         inline static U32 width = 0;
         inline static U32 height = 0;
-        inline static B isWindowClosed = false;
+        inline static Atomic<B> isWindowClosed = false;
     };
 }
 
@@ -191,5 +192,11 @@ namespace PA
     inline auto PresentSurface::UnlockScreenTarget() -> V
     {
         SDL_UnlockTexture(screenTarget);
+    }
+
+
+    inline auto PresentSurface::IsClosed() -> B
+    {
+        return isWindowClosed;
     }
 }

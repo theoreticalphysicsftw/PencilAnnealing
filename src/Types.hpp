@@ -41,6 +41,7 @@
 #include <type_traits>
 
 #include <thread>
+#include <atomic>
 #include <mutex>
 #include <future>
 #include <semaphore>
@@ -143,6 +144,9 @@ namespace PA
 
     using Thread = std::jthread;
     using Mutex = std::mutex;
+
+    template <typename T>
+    using Atomic = std::atomic<T>;
 
     template <typename T>
     using ScopedLock = std::scoped_lock<T>;

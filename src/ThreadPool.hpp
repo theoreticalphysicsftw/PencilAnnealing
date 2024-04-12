@@ -46,8 +46,10 @@ namespace PA
 		auto AddTask(TFunc f, TArgs... args) -> TaskResult<InvokeResult<TFunc, TArgs...>>;
 
 		auto GetMaxTasks() -> U32;
+		auto ShutDown() -> V;
 
 	private:
+		Atomic<B> keepRunning = true;
 		Mutex queueMutex;
 		Deque<Task> queue;
 		Array<Thread> threads;
@@ -76,9 +78,13 @@ namespace PA
 			(
 				[&]()
 				{
-					while (true)
+					while (keepRunning)
 					{
 						availableTasks.acquire();
+						if (!keepRunning)
+						{
+							break;
+						}
 						queueMutex.lock();
 						auto front = queue.front();
 						queue.pop_front();
@@ -96,6 +102,13 @@ namespace PA
 	inline auto ThreadPool<TTask>::GetMaxTasks() -> U32
 	{
 		return threads.size();
+	}
+
+	template<typename TTask>
+	inline auto ThreadPool<TTask>::ShutDown() -> V
+	{
+		keepRunning = false;
+		availableTasks.release(threads.size());
 	}
 
 

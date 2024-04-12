@@ -56,6 +56,8 @@ namespace PA
 		auto ClearSurface(RawCPUImage& img) -> V;
 		auto DrawLinesToSurface(const QuadTree<Line>& lines, RawCPUImage& img) -> Pair<U32, U32>;
 
+		auto ShutDownThreadPool() -> V;
+
 	private:
 		auto ToScreenSpaceCoordinates(Vec in) -> Vec;
 		auto ToWorldCoordinates(Vec inScreen) -> Vec;
@@ -125,8 +127,8 @@ namespace PA
 
 		grayscaleReferenceEdges = GradientMagnitude(threadPool, grayscaleReference);
 
-		this->maxStrokes = maxStrokes ? maxStrokes : (reference->width * reference->height / 16);
-		this->maxSteps = maxSteps ? maxSteps : (1u << 20);
+		this->maxStrokes = maxStrokes ? maxStrokes : (reference->width * reference->height / 8);
+		this->maxSteps = maxSteps ? maxSteps : (1u << 24);
 		this->maxTemperature = 255 * 255;
 		temperature = maxTemperature;
 
@@ -141,7 +143,22 @@ namespace PA
 	inline Annealer<TF>::~Annealer()
 	{
 		auto primitives = lineStrokes.GetSerializedPrimitives();
-		WriteWholeFile("out.pa", { (const Byte*)primitives.data(), primitives.size() });
+		Str svg = "<svg xmlns = \"http://www.w3.org/2000/svg\" width =\"";
+		svg += ToString(currentApproximation.width);
+		svg += "\" height=\"" + ToString(currentApproximation.height) + "\"";
+		svg += " viewBox=\"0 0 " + ToString(currentApproximation.width) + " ";
+		svg += ToString(currentApproximation.height) + "\">\n";
+		svg += "<path stroke=\"#010101\" stroke-width=\"0.5\" d=\"";
+		for (auto& primitive : primitives)
+		{
+			auto p0 = ToScreenSpaceCoordinates(primitive.p0);
+			auto p1 = ToScreenSpaceCoordinates(primitive.p1);
+			svg += "M " + ToString(p0[0]) + " " + ToString(p0[1]) + " ";
+			svg += "L " + ToString(p1[0]) + " " + ToString(p1[1]) + " ";
+		}
+		svg += "\"/>\n";
+		svg += "</svg>";
+		WriteWholeFile("out.svg", { (const Byte*)svg.data(), svg.size() });
 	}
 
 	template<typename TF>
@@ -544,6 +561,12 @@ namespace PA
 		}
 
 		return Pair<U32, U32>(0, imgSize);
+	}
+
+	template<typename TF>
+	inline auto Annealer<TF>::ShutDownThreadPool() -> V
+	{
+		threadPool.ShutDown();
 	}
 
 
