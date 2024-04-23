@@ -137,7 +137,7 @@ namespace PA
     }
 
     template <typename T>
-    typename RemoveReference<T> Move(T&& t)
+    RemoveReference<T> Move(T&& t)
     {
         return std::move(t);
     }
@@ -159,7 +159,7 @@ namespace PA
 
     using Semaphore = std::counting_semaphore<>;
 
-    constexpr auto& GetLogicalCPUCount = std::thread::hardware_concurrency;
+    inline constexpr auto& GetLogicalCPUCount = std::thread::hardware_concurrency;
 
     template <typename T>
     using SharedPtr = std::shared_ptr<T>;
