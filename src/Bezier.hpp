@@ -57,12 +57,29 @@ namespace PA
 		auto GetSquaredDistanceFrom(const Vec& p) const -> TF;
 		auto GetDistanceFrom(const Vec& p) const -> TF;
         auto Split(Scalar t) const -> Pair<QuadraticBezier, QuadraticBezier>;
+
+        auto operator[](U32 idx) -> Vec&;
+        auto operator[](U32 idx) const -> const Vec&;
 	};
 }
 
 
 namespace PA
 {
+	template<typename TF, U32 Dim>
+    auto QuadraticBezier<TF, Dim>::operator[](U32 idx) -> Vec&
+    {
+        return points[idx];
+    }
+
+
+	template<typename TF, U32 Dim>
+    auto QuadraticBezier<TF, Dim>::operator[](U32 idx) const -> const Vec&
+    {
+        return points[idx];
+    }
+
+
 	template<typename TF, U32 Dim>
 	inline auto QuadraticBezier<TF, Dim>::GetPolynomialCoefficients() const -> StaticArray<Vec, 3>
 	{

@@ -49,7 +49,7 @@ namespace PA
 		Annealer(const RawCPUImage* referance, U32 maxStrokes = 0, U32 maxSteps = 0);
 		~Annealer();
 		auto CopyCurrentApproximationToColor(ColorU32* data, U32 stride) -> V;
-		auto AnnealBezier() -> V;
+		auto AnnealBezier() -> B;
 		auto AnnealArc() -> V;
 		auto AnnealLine() -> B;
 
@@ -59,12 +59,14 @@ namespace PA
 		auto ShutDownThreadPool() -> V;
 
 	private:
+        static constexpr U32 logAfterSteps = 128;
+
 		auto ToScreenSpaceCoordinates(Vec in) -> Vec;
 		auto ToWorldCoordinates(Vec inScreen) -> Vec;
 		auto ToScreenSpaceCoordinates(Span<Vec> in) -> V;
 
-		auto DrawBezierToSurface(const QuadraticBezier& b, RawCPUImage& img) -> Pair<U32, U32>;
-		auto DrawBezierToSurface(const Array<QuadraticBezier>& b, RawCPUImage& img) -> Pair<U32, U32>;
+		auto DrawBezierToSurface(const QuadraticBezier& b, RawCPUImage& img) -> V;
+		auto DrawBezierToSurface(const Array<QuadraticBezier>& b, RawCPUImage& img) -> V;
 		auto DrawArcToSurface(const Arc& a, RawCPUImage& img) -> Pair<U32, U32>;
 		auto DrawArcsToSurface(const Array<Arc>& a, RawCPUImage& img) -> Pair<U32, U32>;
 		auto RestoreSurfaceFrom(RawCPUImage& toRestore, const RawCPUImage& reference, Pair<U32, U32> extent);
@@ -127,14 +129,14 @@ namespace PA
 
 		grayscaleReferenceEdges = GradientMagnitude(threadPool, grayscaleReference);
 
-		this->maxStrokes = maxStrokes ? maxStrokes : (reference->width * reference->height / 8);
+		this->maxStrokes = maxStrokes ? maxStrokes : (reference->width * reference->height / 64);
 		this->maxSteps = maxSteps ? maxSteps : (1u << 24);
 		this->maxTemperature = 255 * 255;
 		temperature = maxTemperature;
 
 		optimalEnergy = GetEnergy(currentApproximation);
 
-		//InitBezier();
+		InitBezier();
 		//InitArc();
 		InitLine();
 	}
@@ -264,11 +266,12 @@ namespace PA
 	}
 
 	template<typename TF>
-	inline auto Annealer<TF>::AnnealBezier() -> V
+	inline auto Annealer<TF>::AnnealBezier() -> B
 	{
 		if (step >= maxSteps)
 		{
-			return;
+            Log("Annealing done.");
+			return false;
 		}
 
 		temperature = temperature * TF(0.9999);
@@ -293,6 +296,13 @@ namespace PA
 		{
 			targetPointRef = targetPointRef - pointPreturbation;
 		}
+
+		if (!(step % logAfterSteps))
+		{
+			Log("Energy = ", optimalEnergy, " Temperature = ", temperature);
+		}
+        step++;
+        return true;
 	}
 
 
@@ -338,7 +348,6 @@ namespace PA
 			return false;
 		}
 
-		static constexpr U32 logAfterSteps = 128;
 
 		temperature = temperature * TF(0.999);
 
@@ -429,7 +438,7 @@ namespace PA
 
 
 	template<typename TF>
-	inline auto Annealer<TF>::DrawBezierToSurface(const QuadraticBezier& curve, RawCPUImage& img) -> Pair<U32, U32>
+	inline auto Annealer<TF>::DrawBezierToSurface(const QuadraticBezier& curve, RawCPUImage& img) -> V
 	{
 		auto bBox = curve.GetBBox();
 		auto lowerLeft = ToScreenSpaceCoordinates(bBox.lower);
@@ -437,35 +446,75 @@ namespace PA
 		auto lowerRight = Vec(upperRight[0], lowerLeft[1]);
 		auto upperLeft = Vec(lowerLeft[0], upperRight[1]);
 		auto imgSize = img.width * img.height;
-		auto minIdx = Min(LebesgueCurve(upperLeft[0], upperLeft[1]), imgSize - 1);
-		auto maxIdx = Min(LebesgueCurve(lowerRight[0], lowerRight[1]), imgSize - 1);
 
 		auto screenCurve = curve;
 		ToScreenSpaceCoordinates(screenCurve.points);
 
-		for (auto i = minIdx; i <= maxIdx; ++i)
-		{
-			auto coords = LebesgueCurveInverse(i);
-			auto dist = screenCurve.GetDistanceFrom(Vec(coords.first, coords.second));
-			auto val = SmoothStep(TF(0), TF(1), dist / 1.f);
-			img.data[i] = ClampedU8(img.data[i] - (TF(255) - TF(255) * val));
-		}
+        Array<QuadraticBezier> stack;
+        stack.push_back(screenCurve);
 
-		return Pair<U32, U32>(minIdx, maxIdx);
+        while (!stack.empty())
+        {
+            auto current = stack.back();
+            stack.pop_back();
+
+            auto roughApproxLength = (current[0] - current[1]).Length() + (current[2] - current[1]).Length();
+
+            if (roughApproxLength <= Scalar(1))
+            {
+                auto centroid = current.GetCentroid();
+                auto x = U16(centroid[0]);
+                auto y = U16(centroid[1]);
+                auto i = LebesgueCurve(x, y);
+                if (i >= img.data.size())
+                {
+                    continue;
+                }
+
+                auto pixelCenter = Vec(x, y) + Scalar(0.5);
+                auto dist = current.GetDistanceFrom(pixelCenter);
+                auto val = SmoothStep(TF(0), TF(1), dist);
+                img.data[i] = ClampedU8(img.data[i] - (TF(255) - TF(255) * val));
+            }
+            else
+            {
+                auto split = current.Split(Scalar(0.5));
+                stack.push_back(split.first);
+                stack.push_back(split.second);
+            }
+        }
 	}
 
 
 	template<typename TF>
-	inline auto Annealer<TF>::DrawBezierToSurface(const Array<QuadraticBezier>& curves, RawCPUImage& img) -> Pair<U32, U32>
+	inline auto Annealer<TF>::DrawBezierToSurface(const Array<QuadraticBezier>& curves, RawCPUImage& img) -> V
 	{
-		auto maxExtent = Pair<U32, U32>(0, 0);
-		for (auto& curve : curves)
+
+		auto taskCount = GetLogicalCPUCount();
+		auto curvesPerTask = curves.size() / taskCount;
+
+		auto task =
+		[&](U32 start, U32 end)
 		{
-			auto extent = DrawBezierToSurface(curve, img);
-			maxExtent.first = Max(maxExtent.first, extent.first);
-			maxExtent.second = Max(maxExtent.second, extent.second);
+			for (auto i = start; i < end; ++i)
+			{
+                DrawBezierToSurface(curves[i], img);
+			}
+		};
+
+		Array<TaskResult<V>> results;
+		for (auto i = 0u; i < taskCount; ++i)
+		{
+			results.emplace_back(threadPool.AddTask(task, i * curvesPerTask, (i + 1) * curvesPerTask));
 		}
-		return maxExtent;
+
+		// Remainder
+		task(taskCount * curvesPerTask, curves.size());
+
+		for (auto& result : results)
+		{
+			result.Retrieve();
+		}
 	}
 
 
