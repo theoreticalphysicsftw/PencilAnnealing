@@ -56,6 +56,7 @@ namespace PA
 		auto GetCentroid() const -> Vec;
 		auto GetSquaredDistanceFrom(const Vec& p) const -> TF;
 		auto GetDistanceFrom(const Vec& p) const -> TF;
+        auto Split(Scalar t) const -> Pair<QuadraticBezier, QuadraticBezier>;
 	};
 }
 
@@ -138,4 +139,26 @@ namespace PA
 	{
 		return Sqrt(GetSquaredDistanceFrom(p));
 	}
+
+    template<typename TF, U32 Dim>
+	inline auto QuadraticBezier<TF, Dim>::Split(Scalar t) const -> Pair<QuadraticBezier, QuadraticBezier>
+	{
+		Vec b[3][3];
+
+		for (auto i = 0u; i < 3; ++i)
+		{
+			b[0][i] = points[i];
+		}
+
+		for (auto i = 1u; i < 3u; ++i)
+		{
+			for (auto j = 0u; j < (3 - i); ++j)
+			{
+				b[i][j] = (1 - t) * b[i - 1][j] + t * b[i - 1][j + 1];
+			}
+		}
+
+		return MakePair(QuadraticBezier(b[0][0], b[1][0], b[2][0]), QuadraticBezier(b[2][0], b[1][1], b[0][2]));
+	}
+
 }
