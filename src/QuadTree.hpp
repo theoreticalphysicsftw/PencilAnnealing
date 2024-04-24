@@ -34,9 +34,9 @@ namespace PA
 	template <typename TPrimitive>
 	struct QuadTree
 	{
-		using Scalar = TPrimitive::Scalar;
-		using BBox = TPrimitive::BBox;
-		using Vec = TPrimitive::Vec;
+		using Scalar = typename TPrimitive::Scalar;
+		using BBox = typename TPrimitive::BBox;
+		using Vec = typename TPrimitive::Vec;
 		
 		struct Node
 		{
