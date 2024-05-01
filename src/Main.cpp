@@ -36,7 +36,7 @@ I32 main(I32 argc, C** argv)
 	PA_ASSERT(PresentSurface::Init(rawImage.width, rawImage.height));
 	Annealer<F32> annealer(&rawImage);
 
-	Thread annealingThread([&]() { while (!PresentSurface::IsClosed() && annealer.AnnealLine()); annealer.ShutDownThreadPool(); });
+	Thread annealingThread([&]() { while (!PresentSurface::IsClosed() && annealer.AnnealBezier()); annealer.ShutDownThreadPool(); });
 
 	PresentSurface::AddRenderingCode
 	(

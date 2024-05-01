@@ -281,7 +281,7 @@ namespace PA
 		auto strokeIdx = GetUniformU32(0, strokes.size() - 1);
 
 		auto& targetPointRef = strokes[strokeIdx].points[pointIdx];
-		targetPointRef = targetPointRef + pointPreturbation;
+		targetPointRef = pointPreturbation;
 
 		ClearSurface(workingApproximation);
 		DrawBezierToSurface(strokes, workingApproximation);
@@ -322,7 +322,7 @@ namespace PA
 		auto preturbation = GetUniformFloat01<TF>();
 
 		auto propertyPtr = (TF*) &arcStrokes[strokeIdx];
-		propertyPtr[propertyIdx] += preturbation;
+		propertyPtr[propertyIdx] = preturbation;
 
 		ClearSurface(workingApproximation);
 		DrawArcsToSurface(arcStrokes, workingApproximation);
