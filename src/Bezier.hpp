@@ -61,6 +61,9 @@ namespace PA
         auto operator[](U32 idx) -> Vec&;
         auto operator[](U32 idx) const -> const Vec&;
 	};
+
+	template <typename TF>
+	auto GetRandom2DQuadraticBezierInRange(TF MaxSpan, TF range0 = TF(0), TF range1 = TF(1)) -> QuadraticBezier<TF, 2>;
 }
 
 
@@ -178,4 +181,20 @@ namespace PA
 		return MakePair(QuadraticBezier(b[0][0], b[1][0], b[2][0]), QuadraticBezier(b[2][0], b[1][1], b[0][2]));
 	}
 
+	template<typename TF>
+	auto GetRandom2DQuadraticBezierInRange(TF maxSpan, TF range0, TF range1) -> QuadraticBezier<TF, 2>
+	{
+		auto directionAngle = GetUniformFloat<TF>() * Constants<TF>::C2Pi;
+		auto initialPos = Vec2(GetUniformFloat<TF>(), GetUniformFloat<TF>());
+		auto midPointProp = GetUniformFloat<TF>();
+		auto midPointOffset = GetUniformFloat<TF>();
+
+		auto direction = Vec2(Cos(directionAngle), Sin(directionAngle));
+		auto normal = Vec2(-direction[1], direction[0]);
+
+		auto endPoint = initialPos + direction * maxSpan;
+		auto midPoint = initialPos + midPointProp * endPoint + normal * midPointOffset * maxSpan;
+
+		return QuadraticBezier<TF, 2>(initialPos, midPoint, endPoint);
+	}
 }

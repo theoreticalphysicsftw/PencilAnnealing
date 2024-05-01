@@ -30,7 +30,7 @@ namespace PA
 	inline static std::mt19937 GMerseneTwister(GRandomSeed());
 
 	template <typename TF>
-	auto GetUniformFloat01() -> TF;
+	auto GetUniformFloat(TF range0 = TF(0), TF range1 = TF(1)) -> TF;
 
 	auto GetUniformU32(U32 range0, U32 range1) -> U32;
 	auto GetUniformBernoulli() -> B;
@@ -40,9 +40,9 @@ namespace PA
 namespace PA
 {
 	template<typename TF>
-	auto GetUniformFloat01() -> TF
+	auto GetUniformFloat(TF range0, TF range1) -> TF
 	{
-		std::uniform_real_distribution<TF> dist(TF(0), TF(1));
+		std::uniform_real_distribution<TF> dist(range0, range1);
 		return dist(GMerseneTwister);
 	}
 

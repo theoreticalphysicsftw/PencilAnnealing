@@ -129,7 +129,7 @@ namespace PA
 
 		grayscaleReferenceEdges = GradientMagnitude(threadPool, grayscaleReference);
 
-		this->maxStrokes = maxStrokes ? maxStrokes : (reference->width * reference->height / 64);
+		this->maxStrokes = maxStrokes ? maxStrokes : (reference->width * reference->height / 256);
 		this->maxSteps = maxSteps ? maxSteps : (1u << 24);
 		this->maxTemperature = 255 * 255;
 		temperature = maxTemperature;
@@ -168,19 +168,8 @@ namespace PA
 	{
 		for (auto i = 0u; i < maxStrokes; ++i)
 		{
-			auto strokeLength = SmoothStep(TF(1) / grayscaleReference.width, TF(0.5), TF(0.5) * (1 - TF(i + 1) / maxStrokes));
-			auto directionAngle = GetUniformFloat01<TF>() * Constants<TF>::C2Pi;
-			auto initialPos = Vec2(GetUniformFloat01<TF>(), GetUniformFloat01<TF>());
-			auto midPointProp = GetUniformFloat01<TF>();
-			auto midPointOffset = GetUniformFloat01<TF>();
-
-			auto direction = Vec2(Cos(directionAngle), Sin(directionAngle));
-			auto normal = Vec2(-direction[1], direction[0]);
-
-			auto endPoint = initialPos + direction * strokeLength;
-			auto midPoint = initialPos + midPointProp * endPoint + normal * midPointOffset * strokeLength;
-
-			strokes.emplace_back(initialPos, midPoint, endPoint);
+			auto strokeLength = SmoothStep(TF(1) / grayscaleReference.width, TF(0.2), TF(0.2) * (1 - TF(i + 1) / maxStrokes));
+			strokes.push_back(GetRandom2DQuadraticBezierInRange(strokeLength));
 		}
 	}
 
@@ -190,10 +179,10 @@ namespace PA
 		for (auto i = 0u; i < maxStrokes; ++i)
 		{
 			auto strokeLength = SmoothStep(TF(1) / grayscaleReference.width, TF(0.5), TF(0.5) * (1 - TF(i + 1) / maxStrokes));
-			auto arcStart = GetUniformFloat01<TF>() * Constants<TF>::C2Pi;
-			auto arcEnd = GetUniformFloat01<TF>() * Constants<TF>::C2Pi;
-			auto center = Vec2(GetUniformFloat01<TF>(), GetUniformFloat01<TF>());
-			auto radius = GetUniformFloat01<TF>() * strokeLength;
+			auto arcStart = GetUniformFloat<TF>() * Constants<TF>::C2Pi;
+			auto arcEnd = GetUniformFloat<TF>() * Constants<TF>::C2Pi;
+			auto center = Vec2(GetUniformFloat<TF>(), GetUniformFloat<TF>());
+			auto radius = GetUniformFloat<TF>() * strokeLength;
 			arcStrokes.emplace_back(center, radius, arcStart, arcEnd);
 		}
 	}
@@ -206,8 +195,8 @@ namespace PA
 		for (auto i = 0u; i < maxStrokes; ++i)
 		{
 			auto strokeLength = SmoothStep(TF(4) / grayscaleReference.width, TF(0.2), TF(0.2) * (1 - TF(i + 1) / maxStrokes));
-			auto p0 = Vec2(GetUniformFloat01<TF>(), GetUniformFloat01<TF>());
-			auto angle = GetUniformFloat01<TF>() * Constants<TF>::C2Pi;
+			auto p0 = Vec2(GetUniformFloat<TF>(), GetUniformFloat<TF>());
+			auto angle = GetUniformFloat<TF>() * Constants<TF>::C2Pi;
 			auto direction = Vec2(Cos(angle), Sin(angle)) * strokeLength;
 			PA_ASSERT(direction.Length() <= 1);
 			auto p1 = p0 + direction;
@@ -274,27 +263,31 @@ namespace PA
 			return false;
 		}
 
-		temperature = temperature * TF(0.9999);
+		temperature = temperature * TF(0.999);
 
-		auto pointPreturbation = Vec(GetUniformFloat01<TF>(), GetUniformFloat01<TF>());
-		auto pointIdx = GetUniformU32(0, 2);
 		auto strokeIdx = GetUniformU32(0, strokes.size() - 1);
 
-		auto& targetPointRef = strokes[strokeIdx].points[pointIdx];
-		targetPointRef = pointPreturbation;
+		auto targetCurvePtr = &strokes[strokeIdx];
+		auto oldCurve = *targetCurvePtr;
+		*targetCurvePtr = GetRandom2DQuadraticBezierInRange(TF(1));
 
 		ClearSurface(workingApproximation);
 		DrawBezierToSurface(strokes, workingApproximation);
 		auto currentEnergy = GetEnergy(workingApproximation);
 
-		if (currentEnergy < optimalEnergy || Exp((optimalEnergy - currentEnergy) / temperature) >= GetUniformFloat01<TF>())
+		auto transitionThreshold = Exp((optimalEnergy - currentEnergy) / temperature);
+
+		if (currentEnergy < optimalEnergy || transitionThreshold >= GetUniformFloat<TF>())
 		{
 			optimalEnergy = currentEnergy;
-			currentApproximation = workingApproximation;
+			if (!(step % logAfterSteps) || step == maxSteps - 1)
+			{
+				currentApproximation = workingApproximation;
+			}
 		}
 		else
 		{
-			targetPointRef = targetPointRef - pointPreturbation;
+			*targetCurvePtr = oldCurve;
 		}
 
 		if (!(step % logAfterSteps))
@@ -319,7 +312,7 @@ namespace PA
 		
 		auto strokeIdx = GetUniformU32(0, arcStrokes.size() - 1);
 		auto propertyIdx = GetUniformU32(0, 4);
-		auto preturbation = GetUniformFloat01<TF>();
+		auto preturbation = GetUniformFloat<TF>();
 
 		auto propertyPtr = (TF*) &arcStrokes[strokeIdx];
 		propertyPtr[propertyIdx] = preturbation;
@@ -328,7 +321,9 @@ namespace PA
 		DrawArcsToSurface(arcStrokes, workingApproximation);
 		auto currentEnergy = GetEnergy(workingApproximation);
 
-		if (currentEnergy < optimalEnergy || Exp((optimalEnergy - currentEnergy) / temperature) >= GetUniformFloat01<TF>())
+		auto transitionThreshold = Exp((optimalEnergy - currentEnergy) / temperature);
+
+		if (currentEnergy < optimalEnergy || transitionThreshold >= GetUniformFloat<TF>())
 		{
 			optimalEnergy = currentEnergy;
 			currentApproximation = workingApproximation;
@@ -358,9 +353,9 @@ namespace PA
 		BBox field(Vec(0, 0), Vec(1, 1));
 		while (!appropriatePreturbation)
 		{
-			auto newAngle = GetUniformFloat01<TF>() * Constants<TF>::C2Pi;
+			auto newAngle = GetUniformFloat<TF>() * Constants<TF>::C2Pi;
 			auto newDirection = Vec(Sin(newAngle), Cos(newAngle)) * oldLength;
-			auto newStart = Vec(GetUniformFloat01<TF>(), GetUniformFloat01<TF>());
+			auto newStart = Vec(GetUniformFloat<TF>(), GetUniformFloat<TF>());
 			line.p0 = newStart;
 			line.p1 = newStart + newDirection;
 
@@ -383,7 +378,7 @@ namespace PA
 
 		auto transitionThreshold = Exp((optimalEnergy - currentEnergy) / temperature);
 
-		if (currentEnergy < optimalEnergy || transitionThreshold >= GetUniformFloat01<TF>())
+		if (currentEnergy < optimalEnergy || transitionThreshold >= GetUniformFloat<TF>())
 		{
 			optimalEnergy = currentEnergy;
 			if (!(step % logAfterSteps) || step == maxSteps - 1)
