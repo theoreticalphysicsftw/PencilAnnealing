@@ -47,7 +47,8 @@ namespace PA
 			};
 			StaticArray<Vec, 3> points;
 		};
-
+		
+		QuadraticBezier() {} 
 		QuadraticBezier(const Vec& p0, const Vec& p1, const Vec& p2) : p0(p0), p1(p1), p2(p2) {}
 
 		auto GetPolynomialCoefficients() const -> StaticArray<Vec, 3>;
