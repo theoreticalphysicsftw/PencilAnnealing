@@ -55,6 +55,10 @@ namespace PA
     inline auto Frac(TF n) -> TF;
     template <typename TF>
     inline auto Abs(TF n) -> TF;
+    template <typename TF>
+    inline auto Floor(TF n) -> TF;
+    template <typename TF>
+    inline auto Ceil(TF n) -> TF;
 
     template <typename T>
     inline auto SmoothStep(T range0, T range1, T x) -> T;
@@ -154,11 +158,23 @@ namespace PA
         return std::abs(n);
     }
 
+    template<typename TF>
+    auto Floor(TF n) -> TF
+    {
+        return std::floor(n);
+    }
+
+    template<typename TF>
+    auto Ceil(TF n) -> TF
+    {
+        return std::ceil(n);
+    }
+
 
     template<typename T>
     auto SmoothStep(T range0, T range1, T x) -> T
     {
-        x = Clamp((x - range0) / (range1 - range0), T(range0), T(range1));
+        x = Clamp((x - range0) / (range1 - range0), T(0), T(1));
         return x * x * (T(3) - T(2) * x);
     }
 
