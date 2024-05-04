@@ -32,7 +32,7 @@ using namespace PA;
 
 I32 main(I32 argc, C** argv)
 {
-	auto rawImage = DecodeWebP(GEmbeddedMediumTestImageData, CEmbeddedMediumTestImageSize);
+	auto rawImage = DecodeWebP(GEmbeddedTestImageData, CEmbeddedTestImageSize);
 	PA_ASSERT(PresentSurface::Init(rawImage.width, rawImage.height));
 	Annealer<F32> annealer(&rawImage);
 

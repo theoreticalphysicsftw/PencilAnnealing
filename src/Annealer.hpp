@@ -48,14 +48,12 @@ namespace PA
 		auto CopyCurrentApproximationToColor(ColorU32* data, U32 stride) -> V;
 		auto AnnealBezier() -> B;
 
-		auto ClearSurface(RawCPUImage& img) -> V;
 		auto DrawLinesToSurface(const QuadTree<Line>& lines, RawCPUImage& img) -> Pair<U32, U32>;
 
 		auto ShutDownThreadPool() -> V;
 
 	private:
-        static constexpr U32 logAfterSteps = 128;
-		auto RestoreSurfaceFrom(RawCPUImage& toRestore, const RawCPUImage& reference, Pair<U32, U32> extent);
+        static constexpr U32 logAfterSteps = 512;
 
 		auto GetEnergy(const RawCPUImage& img0, Pair<U32, U32> extent) -> TF;
 		auto GetEnergy(const RawCPUImage& img0) -> TF;
@@ -67,8 +65,10 @@ namespace PA
 		RawCPUImage grayscaleReferenceEdges;
 		RawCPUImage currentApproximation;
 		RawCPUImage workingApproximation;
+		RawCPUImage workingApproximationHDR;
 
 		Array<QuadraticBezier> strokes;
+		Array<Array<Fragment>> fragmentsMap;
 
 		U32 maxStrokes;
 		U32 maxSteps;
@@ -89,8 +89,8 @@ namespace PA
 	inline Annealer<TF>::Annealer(const RawCPUImage* reference, U32 maxStrokes, U32 maxSteps) :
 		grayscaleReference(reference->width, reference->height, EFormat::A8, true),
 		currentApproximation(reference->width, reference->height, EFormat::A8, true),
-		workingApproximation(reference->width, reference->height, EFormat::A8, true)
-
+		workingApproximation(reference->width, reference->height, EFormat::A8, true),
+		workingApproximationHDR(reference->width, reference->height, EFormat::A32Float, true)
 	{
 		for (auto i = 0u; i < reference->width; ++i)
 		{
@@ -108,6 +108,10 @@ namespace PA
 			currentApproximation.data[i] = 255u;
 			workingApproximation.data[i] = 255u;
 		}
+
+		currentApproximation.Clear(Byte(255));
+		workingApproximation.Clear(Byte(255));
+		workingApproximationHDR.Clear(F32(1.0));
 
 		grayscaleReferenceEdges = GradientMagnitude(threadPool, grayscaleReference);
 
@@ -135,38 +139,10 @@ namespace PA
 			auto strokeLength = SmoothStep(TF(1) / grayscaleReference.width, TF(0.2), TF(0.2) * (1 - TF(i + 1) / maxStrokes));
 			strokes.push_back(GetRandom2DQuadraticBezierInRange(strokeLength));
 		}
-	}
-
-	template<typename TF>
-	inline auto Annealer<TF>::ClearSurface(RawCPUImage& img) -> V
-	{
-		auto imgSize = img.height * img.width;
-		auto taskCount = GetLogicalCPUCount();
-		auto pixelsPerTask = imgSize / taskCount;
-
-		auto task =
-		[&](U32 start, U32 end)
-		{
-			for (auto i = start; i < end; ++i)
-			{
-				img.data[i] = 255u;
-			}
-		};
-
-		Array<TaskResult<V>> results;
-		for (auto i = 0u; i < taskCount; ++i)
-		{
-			results.emplace_back(threadPool.AddTask(task, i * pixelsPerTask, (i + 1) * pixelsPerTask));
-		}
-
-		// Remainder
-		task(pixelsPerTask * taskCount, imgSize);
-
-		for (auto& result : results)
-		{
-			result.Retrieve();
-		}
-
+		fragmentsMap.resize(strokes.size());
+		RasterizeToFragments(Span<const QuadraticBezier>(strokes), fragmentsMap, grayscaleReference.width, grayscaleReference.height, threadPool);
+		PutFragmentsOnHDRSurface(fragmentsMap, workingApproximationHDR);
+		CopyHDRSurfaceToGSSurface(workingApproximationHDR, workingApproximation);
 	}
 
 
@@ -193,16 +169,21 @@ namespace PA
 			return false;
 		}
 
-		temperature = temperature * TF(0.99);
+		temperature = temperature * TF(0.999);
 
 		auto strokeIdx = GetUniformU32(0, strokes.size() - 1);
 
-		auto targetCurvePtr = &strokes[strokeIdx];
-		auto oldCurve = *targetCurvePtr;
-		*targetCurvePtr = GetRandom2DQuadraticBezierInRange(TF(1));
-
-		ClearSurface(workingApproximation);
-		RasterizeToGSSurfaceUnsafe(Span<const QuadraticBezier>(strokes), workingApproximation, threadPool);
+		auto& oldCurve = strokes[strokeIdx];
+		auto newCurve = GetRandom2DQuadraticBezierInRange(TF(1));
+		auto& oldFragments = fragmentsMap[strokeIdx];
+		Array<Fragment> newFragments;
+		RasterizeToFragments(newCurve, newFragments, workingApproximationHDR.width, workingApproximationHDR.height);
+		
+		RemoveFragmentsFromHDRSurface(oldFragments, workingApproximationHDR);
+		PutFragmentsOnHDRSurface(newFragments, workingApproximationHDR);
+		// Update the surface on both the old and new fragments;
+		CopyHDRSurfaceToGSSurface(workingApproximationHDR, workingApproximation, oldFragments);
+		CopyHDRSurfaceToGSSurface(workingApproximationHDR, workingApproximation, newFragments);
 		auto currentEnergy = GetEnergy(workingApproximation);
 
 		auto transitionThreshold = Exp((optimalEnergy - currentEnergy) / temperature);
@@ -210,6 +191,8 @@ namespace PA
 		if (currentEnergy < optimalEnergy || transitionThreshold >= GetUniformFloat<TF>())
 		{
 			optimalEnergy = currentEnergy;
+			oldFragments = newFragments;
+			oldCurve = newCurve;
 			if (!(step % logAfterSteps) || step == maxSteps - 1)
 			{
 				currentApproximation = workingApproximation;
@@ -217,7 +200,10 @@ namespace PA
 		}
 		else
 		{
-			*targetCurvePtr = oldCurve;
+			RemoveFragmentsFromHDRSurface(newFragments, workingApproximationHDR);
+			PutFragmentsOnHDRSurface(oldFragments, workingApproximationHDR);
+			CopyHDRSurfaceToGSSurface(workingApproximationHDR, workingApproximation, oldFragments);
+			CopyHDRSurfaceToGSSurface(workingApproximationHDR, workingApproximation, newFragments);
 		}
 
 		if (!(step % logAfterSteps))
@@ -234,16 +220,6 @@ namespace PA
 	inline auto Annealer<TF>::ShutDownThreadPool() -> V
 	{
 		threadPool.ShutDown();
-	}
-
-
-	template<typename TF>
-	inline auto Annealer<TF>::RestoreSurfaceFrom(RawCPUImage& toRestore, const RawCPUImage& reference, Pair<U32, U32> extent)
-	{
-		for (auto i = extent.first; i < extent.second; ++i)
-		{
-			toRestore.data[i] = reference.data[i];
-		}
 	}
 
 
