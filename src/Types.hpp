@@ -103,6 +103,8 @@ namespace PA
     using Str = std::string;
     using StrView = std::string_view;
 
+    using namespace std::literals::string_view_literals;
+
     template <typename T>
     using Function = std::function<T>;
 
