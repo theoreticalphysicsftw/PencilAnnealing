@@ -28,21 +28,21 @@
 namespace PA
 {
 	template <typename TF>
-	inline auto SerializeToSVG(Span<const QuadraticBezier<TF, 2>> normalizedCoords, TF width, TF height, StrView outFile = "out.svg"sv);
+	inline auto SerializeToSVG(Span<const QuadraticBezier<TF, 2>> normalizedCoords, U32 width, U32 height, StrView outFile = "out.svg"sv);
 
 }
 
 namespace PA
 {
 	template<typename TF>
-	auto SerializeToSVG(Span<const QuadraticBezier<TF, 2>> normalizedCoords, TF width, TF height, StrView outFile)
+	auto SerializeToSVG(Span<const QuadraticBezier<TF, 2>> normalizedCoords, U32 width, U32 height, StrView outFile)
 	{
 		Str svg = "<svg xmlns = \"http://www.w3.org/2000/svg\" width =\"";
 		svg += ToString(width);
 		svg += "\" height=\"" + ToString(height) + "\"";
 		svg += " viewBox=\"0 0 " + ToString(width) + " ";
 		svg += ToString(height) + "\">\n";
-		svg += "<path stroke=\"#010101\" stroke-width=\"0.5\" d=\"";
+		svg += "<path fill=\"none\" stroke=\"#010101\" stroke-width=\"0.5\" d=\"";
 		for (auto& q : normalizedCoords)
 		{
 			auto qp0 = ToSurfaceCoordinates(q.p0, width, height);
