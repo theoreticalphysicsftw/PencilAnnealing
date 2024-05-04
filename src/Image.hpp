@@ -24,6 +24,8 @@
 #pragma once
 
 #include "Types.hpp"
+#include "Algebra.hpp"
+
 
 namespace PA
 {
@@ -58,12 +60,31 @@ namespace PA
 		Array<Byte> data;
 
 		RawCPUImage(U32 width = 0, U32 height = 0, EFormat format = EFormat::Invalid, B lebesgueOrdered = false);
+
+		template <typename T>
+		auto ToSurfaceCoordinates(const Vector<T, 2>& in) const -> Vector<T, 2>;
+		template <typename T>
+		auto ToNormalizedCoordinates(const Vector<T, 2>& inSurface) const -> Vector<T, 2>;
+		template <typename T>
+		auto ToSurfaceCoordinates(Span<Vector<T, 2>> in) const -> V;
 	};
+
+	template <typename TF>
+	inline auto ToSurfaceCoordinates(const Vector<TF, 2>& in, U32 width, U32 height) -> Vector<TF, 2>;
 }
 
 
 namespace PA
 {
+	template<typename TF>
+	auto ToSurfaceCoordinates(const Vector<TF, 2>& in, U32 width, U32 height) -> Vector<TF, 2>
+	{
+		Vector<TF, 2> result;
+		result[0] = in[0] * (width - 1);
+		result[1] = (TF(1) - in[1]) * (height - 1);
+		return result;
+	}
+
 	inline auto GetSize(EFormat format)
 	{
 		static constexpr U32 sizeTable[] =
@@ -79,9 +100,38 @@ namespace PA
 		return sizeTable[U32(format)];
 	}
 
+
 	inline RawCPUImage::RawCPUImage(U32 width, U32 height, EFormat format, B lebesgueOrdered) :
 		width(width), height(height), format(format), lebesgueOrdered(lebesgueOrdered)
 	{
 		data.resize(height * width * GetSize(format));
 	}
+
+
+	template<typename TF>
+	inline auto RawCPUImage::ToSurfaceCoordinates(const Vector<TF, 2>& in) const -> Vector<TF, 2>
+	{
+		return ::ToSurfaceCoordinates(in, width, height);
+	}
+
+
+	template<typename TF>
+	inline auto RawCPUImage::ToNormalizedCoordinates(const Vector<TF, 2>& inSurface) const -> Vector<TF, 2>
+	{
+		Vector<TF, 2> result;
+		result[0] = inSurface[0] / (width - 1);
+		result[1] = TF(1) - inSurface[1] / (height - 1);
+		return result;
+	}
+
+
+	template<typename T>
+	inline auto RawCPUImage::ToSurfaceCoordinates(Span<Vector<T, 2>> in) const -> V
+	{
+		for (auto& vec : in)
+		{
+			vec = RawCPUImage::ToSurfaceCoordinates(vec);
+		}
+	}
+
 }
