@@ -25,6 +25,7 @@
 
 #include "Types.hpp"
 #include "Algebra.hpp"
+#include "ThreadPool.hpp"
 
 
 namespace PA
@@ -67,6 +68,12 @@ namespace PA
 		auto ToNormalizedCoordinates(const Vector<T, 2>& inSurface) const -> Vector<T, 2>;
 		template <typename T>
 		auto ToSurfaceCoordinates(Span<Vector<T, 2>> in) const -> V;
+
+		template <typename T>
+		auto Clear(T clearValue = T(0)) -> V;
+
+		template <typename T>
+		auto Clear(T clearValue, ThreadPool<>& threadPool) -> V;
 	};
 
 	template <typename TF>
@@ -131,6 +138,51 @@ namespace PA
 		for (auto& vec : in)
 		{
 			vec = RawCPUImage::ToSurfaceCoordinates(vec);
+		}
+	}
+
+
+	template<typename T>
+	inline auto RawCPUImage::Clear(T clearValue) -> V
+	{
+		auto maxExtent = width * height;
+		auto tPtr = (T*)data.data();
+
+		for (auto i = 0u; i < maxExtent; ++i)
+		{
+			tPtr[i] = clearValue;
+		}
+	}
+
+	template<typename T>
+	inline auto RawCPUImage::Clear(T clearValue, ThreadPool<>& threadPool) -> V
+	{
+		auto imgSize = height * width;
+		auto tPtr = (T*)data.data();
+		auto taskCount = GetLogicalCPUCount();
+		auto pixelsPerTask = imgSize / taskCount;
+
+		auto task =
+			[&](U32 start, U32 end)
+			{
+				for (auto i = start; i < end; ++i)
+				{
+					tPtr[i] = clearValue;
+				}
+			};
+
+		Array<TaskResult<V>> results;
+		for (auto i = 0u; i < taskCount; ++i)
+		{
+			results.emplace_back(threadPool.AddTask(task, i * pixelsPerTask, (i + 1) * pixelsPerTask));
+		}
+
+		// Remainder
+		task(pixelsPerTask * taskCount, imgSize);
+
+		for (auto& result : results)
+		{
+			result.Retrieve();
 		}
 	}
 
