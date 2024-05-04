@@ -78,6 +78,8 @@ namespace PA
 
 	template <typename TF>
 	inline auto ToSurfaceCoordinates(const Vector<TF, 2>& in, U32 width, U32 height) -> Vector<TF, 2>;
+	template <typename TF>
+	inline auto ToSurfaceCoordinates(Span<Vector<TF, 2>> in, U32 width, U32 height) -> V;
 }
 
 
@@ -90,6 +92,15 @@ namespace PA
 		result[0] = in[0] * (width - 1);
 		result[1] = (TF(1) - in[1]) * (height - 1);
 		return result;
+	}
+
+	template<typename TF>
+	auto ToSurfaceCoordinates(Span<Vector<TF, 2>> in, U32 width, U32 height) -> V
+	{
+		for (auto& vec : in)
+		{
+			vec = ToSurfaceCoordinates(vec, width, height);
+		}
 	}
 
 	inline auto GetSize(EFormat format)
@@ -135,10 +146,7 @@ namespace PA
 	template<typename T>
 	inline auto RawCPUImage::ToSurfaceCoordinates(Span<Vector<T, 2>> in) const -> V
 	{
-		for (auto& vec : in)
-		{
-			vec = RawCPUImage::ToSurfaceCoordinates(vec);
-		}
+		::ToSurfaceCoordinates(in, width, height);
 	}
 
 
