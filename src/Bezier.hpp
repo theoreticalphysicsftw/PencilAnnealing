@@ -185,15 +185,18 @@ namespace PA
 	auto GetRandom2DQuadraticBezierInRange(TF maxSpan, TF range0, TF range1) -> QuadraticBezier<TF, 2>
 	{
 		auto directionAngle = GetUniformFloat<TF>() * Constants<TF>::C2Pi;
-		auto initialPos = Vec2(GetUniformFloat<TF>(), GetUniformFloat<TF>());
-		auto midPointProp = GetUniformFloat<TF>();
-		auto midPointOffset = GetUniformFloat<TF>();
+		auto initialPos = Vec2(GetUniformFloat<TF>(range0, range1), GetUniformFloat<TF>(range0, range1));
+		auto midPointProp = GetUniformFloat<TF>(range0, range1);
+		auto midPointOffset = GetUniformFloat<TF>(range0, range1);
+
+		auto spanDirection = GetUniformFloat<TF>(TF(0), maxSpan);
+		auto spanNormal = GetUniformFloat<TF>(TF(0), maxSpan);
 
 		auto direction = Vec2(Cos(directionAngle), Sin(directionAngle));
 		auto normal = Vec2(-direction[1], direction[0]);
 
-		auto endPoint = initialPos + direction * maxSpan;
-		auto midPoint = initialPos + midPointProp * endPoint + normal * midPointOffset * maxSpan;
+		auto endPoint = initialPos + direction * spanDirection;
+		auto midPoint = initialPos + midPointProp * endPoint + normal * midPointOffset * spanNormal;
 
 		return QuadraticBezier<TF, 2>(initialPos, midPoint, endPoint);
 	}
