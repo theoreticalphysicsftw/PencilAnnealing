@@ -198,42 +198,56 @@ namespace PA
 	template<typename TF>
 	auto RasterizeToFragments(const QuadraticBezier<TF, 2>& curve, Array<Fragment>& fragments, U32 width, U32 height) -> V
 	{
+		static constexpr TF splitCutoff = 8;
+		static constexpr TF valThreshold = TF(0.0001);
 		fragments.clear();
 		auto imgSize = width * height;
 		auto screenCurve = curve;
 		ToSurfaceCoordinates(Span<Vector<TF, 2>>(screenCurve.points), width, height);
 
-		Array<QuadraticBezier<TF, 2>> stack;
-		stack.push_back(screenCurve);
+		StaticArray<QuadraticBezier<TF, 2>, 64> stack;
+		auto stackSize = 0u;
+		stack[stackSize++] = screenCurve;
 
-		while (!stack.empty())
+		while (stackSize)
 		{
-			auto current = stack.back();
-			stack.pop_back();
+			stackSize--;
+			auto current = stack[stackSize];
 
 			auto roughApproxLength = (current[0] - current[1]).Length() + (current[2] - current[1]).Length();
 
-			if (roughApproxLength <= TF(1))
+			if (roughApproxLength <= splitCutoff)
 			{
-				auto centroid = current.GetCentroid();
-				auto x = U16(centroid[0]);
-				auto y = U16(centroid[1]);
-				auto i = LebesgueCurve(x, y);
-				if (i >= imgSize)
+				auto bBox = current.GetBBox();
+				auto xMin = U32(Max(TF(0), Floor(bBox.lower[0])));
+				auto xMax = U32(Max(TF(0), Ceil(bBox.upper[0])));
+				auto yMin = U32(Max(TF(0), Floor(bBox.lower[1])));
+				auto yMax = U32(Max(TF(0), Ceil(bBox.upper[1])));
+				for (auto i = yMin ; i <= yMax; ++i)
 				{
-					continue;
-				}
+					for (auto j = xMin ; j <= xMax; ++j)
+					{
+						auto idx = LebesgueCurve(j, i);
+						if (idx >= imgSize)
+						{
+							break;
+						}
 
-				auto pixelCenter = Vector<TF, 2>(x, y) + TF(0.5);
-				auto dist = current.GetDistanceFrom(pixelCenter);
-				auto val = SmoothStep(TF(0), TF(1), dist);
-				fragments.emplace_back(i, val);
+						auto pixelCenter = Vector<TF, 2>(j, i) + TF(0.5);
+						auto dist = current.GetDistanceFrom(pixelCenter);
+						auto val = Max(TF(0), TF(1) - SmoothStep(TF(0), TF(1), dist));
+						if (val > valThreshold)
+						{
+							fragments.emplace_back(idx, val);
+						}
+					}
+				}
 			}
 			else
 			{
 				auto split = current.Split(TF(0.5));
-				stack.push_back(split.first);
-				stack.push_back(split.second);
+				stack[stackSize++] = split.first;
+				stack[stackSize++] = split.second;
 			}
 		}
 	}
