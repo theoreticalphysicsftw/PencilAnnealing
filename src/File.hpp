@@ -29,16 +29,16 @@
 
 namespace PA
 {
-	inline auto ReadWholeFile(const Str& path, Array<Byte>& data) -> B;
-	inline auto WriteWholeFile(const Str& path, Span<const Byte> data) -> B;
+	inline auto ReadWholeFile(StrView path, Array<Byte>& data) -> B;
+	inline auto WriteWholeFile(StrView path, Span<const Byte> data) -> B;
 }
 
 
 namespace PA
 {
-	auto ReadWholeFile(const Str& path, Array<Byte>& data) -> B
+	auto ReadWholeFile(StrView path, Array<Byte>& data) -> B
 	{
-        auto handle = fopen(path.c_str(), "rb");
+        auto handle = fopen(Str(path).c_str(), "rb");
 
         if (!handle)
         {
@@ -59,9 +59,9 @@ namespace PA
         return true;
 	}
 
-	auto WriteWholeFile(const Str& path, Span<const Byte> data) -> B
+	auto WriteWholeFile(StrView path, Span<const Byte> data) -> B
 	{
-        auto handle = fopen(path.c_str(), "wb");
+        auto handle = fopen(Str(path).c_str(), "wb");
 
         if (!handle)
         {
