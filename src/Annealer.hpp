@@ -53,12 +53,13 @@ namespace PA
 		auto ShutDownThreadPool() -> V;
 
 	private:
-        static constexpr U32 logAfterSteps = 512;
+        static constexpr U32 logAfterSteps = 1024;
 
 		auto GetEnergy(const RawCPUImage& img0, Pair<U32, U32> extent) -> TF;
 		auto GetEnergy(const RawCPUImage& img0) -> TF;
 
 		auto InitBezier() -> V;
+		auto FindEdgeSupport() -> V;
 
 		RawCPUImage grayscaleReference;
 		RawCPUImage grayscaleBlurredReference;
@@ -69,6 +70,8 @@ namespace PA
 
 		Array<QuadraticBezier> strokes;
 		Array<Array<Fragment>> fragmentsMap;
+
+		Array<U32> edgeSupport;
 
 		U32 maxStrokes;
 		U32 maxSteps;
@@ -115,8 +118,10 @@ namespace PA
 
 		grayscaleReferenceEdges = GradientMagnitude(threadPool, grayscaleReference);
 
-		this->maxStrokes = maxStrokes ? maxStrokes : (reference->width * reference->height / 512);
-		this->maxSteps = maxSteps ? maxSteps : (1u << 24);
+		FindEdgeSupport();
+
+		this->maxStrokes = maxStrokes ? maxStrokes : (reference->width * reference->height / 1024);
+		this->maxSteps = maxSteps ? maxSteps : (1u << 25);
 		this->maxTemperature = 255 * 255;
 		temperature = maxTemperature;
 
@@ -145,6 +150,19 @@ namespace PA
 		CopyHDRSurfaceToGSSurface(workingApproximationHDR, workingApproximation);
 	}
 
+	template<typename TF>
+	inline auto Annealer<TF>::FindEdgeSupport() -> V
+	{
+		auto imgSize = grayscaleReferenceEdges.width * grayscaleReferenceEdges.height;
+		for (auto i = 0; i < imgSize; ++i)
+		{
+			if (grayscaleReferenceEdges.data[i] < 255)
+			{
+				edgeSupport.push_back(i);
+			}
+		}
+	}
+
 
 	template<typename TF>
 	inline auto Annealer<TF>::CopyCurrentApproximationToColor(ColorU32* data, U32 stride) -> V
@@ -169,13 +187,24 @@ namespace PA
 			return false;
 		}
 
-		temperature = temperature * TF(0.999);
+		temperature = temperature * TF(0.99);
 
 		auto strokeIdx = GetUniformU32(0, strokes.size() - 1);
 
 		auto& oldCurve = strokes[strokeIdx];
-		auto newCurve = GetRandom2DQuadraticBezierInRange(TF(1));
 		auto& oldFragments = fragmentsMap[strokeIdx];
+
+		auto s0 = GetUniformU32(0, edgeSupport.size() - 1);
+		auto s1 = GetUniformU32(0, edgeSupport.size() - 1);
+		auto s2 = GetUniformU32(0, edgeSupport.size() - 1);
+		auto p0 = LebesgueCurveInverse(edgeSupport[s0]);
+		auto p1 = LebesgueCurveInverse(edgeSupport[s1]);
+		auto p2 = LebesgueCurveInverse(edgeSupport[s2]);
+
+		auto newCurve = GetBezierPassingThrough(Vec(p0.first, p0.second), Vec(p1.first, p1.second), Vec(p2.first, p2.second));
+		grayscaleReference.ToNormalizedCoordinates(Span<Vec>(newCurve.points));
+		//auto newCurve = GetRandom2DQuadraticBezierInRange(TF(1));
+
 		Array<Fragment> newFragments;
 		RasterizeToFragments(newCurve, newFragments, workingApproximationHDR.width, workingApproximationHDR.height);
 		
