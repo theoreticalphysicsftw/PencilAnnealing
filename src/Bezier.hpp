@@ -65,6 +65,9 @@ namespace PA
 
 	template <typename TF>
 	auto GetRandom2DQuadraticBezierInRange(TF MaxSpan, TF range0 = TF(0), TF range1 = TF(1)) -> QuadraticBezier<TF, 2>;
+
+	template <typename TF>
+	auto GetBezierPassingThrough(const Vector<TF, 2>& p0, const Vector<TF, 2>& p1, const Vector<TF, 2>& p2) -> QuadraticBezier<TF, 2>;
 }
 
 
@@ -200,5 +203,13 @@ namespace PA
 		auto midPoint = initialPos + midPointProp * endPoint + normal * midPointOffset * spanNormal;
 
 		return QuadraticBezier<TF, 2>(initialPos, midPoint, endPoint);
+	}
+
+
+	template<typename TF>
+	auto GetBezierPassingThrough(const Vector<TF, 2>& p0, const Vector<TF, 2>& p1, const Vector<TF, 2>& p2) -> QuadraticBezier<TF, 2>
+	{
+		auto cp = TF(2) * p1 - TF(0.5) * (p0 + p2);
+		return QuadraticBezier<TF, 2>(p0, cp, p2);
 	}
 }
