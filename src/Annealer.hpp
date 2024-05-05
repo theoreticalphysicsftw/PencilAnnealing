@@ -267,13 +267,13 @@ namespace PA
 			for (auto i = start; i < end; ++i)
 			{
 				auto diff = TF(grayscaleReference.data[i]) - TF(img.data[i]);
-				energy += 0.2 * (diff * diff) / extentSize;
+				energy += 0.1 * (diff * diff) / extentSize;
 			}
 
 			for (auto i = start; i < end; ++i)
 			{
 				auto diff = TF(grayscaleReferenceEdges.data[i]) - TF(img.data[i]);
-				energy += 0.8 * (diff * diff) / extentSize;
+				energy += 0.9 * (diff * diff) / extentSize;
 			}
 			return energy;
 		};
