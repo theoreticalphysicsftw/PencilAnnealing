@@ -203,10 +203,11 @@ namespace PA
 
 		auto newCurve = GetBezierPassingThrough(Vec(p0.first, p0.second), Vec(p1.first, p1.second), Vec(p2.first, p2.second));
 		grayscaleReference.ToNormalizedCoordinates(Span<Vec>(newCurve.points));
+		auto newColor = GetUniformFloat(TF(0), TF(1));
 		//auto newCurve = GetRandom2DQuadraticBezierInRange(TF(1));
 
 		Array<Fragment> newFragments;
-		RasterizeToFragments(newCurve, newFragments, workingApproximationHDR.width, workingApproximationHDR.height);
+		RasterizeToFragments(newCurve, newFragments, workingApproximationHDR.width, workingApproximationHDR.height, newColor);
 		
 		RemoveFragmentsFromHDRSurface(oldFragments, workingApproximationHDR);
 		PutFragmentsOnHDRSurface(newFragments, workingApproximationHDR);

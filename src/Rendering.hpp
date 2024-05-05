@@ -49,7 +49,7 @@ namespace PA
 	};
 
 	template <typename TF>
-	inline auto RasterizeToFragments(const QuadraticBezier<TF, 2>& curve, Array<Fragment>& fragments, U32 width, U32 height) -> V;
+	inline auto RasterizeToFragments(const QuadraticBezier<TF, 2>& curve, Array<Fragment>& fragments, U32 width, U32 height, TF color = TF(1)) -> V;
 
 	template<typename TF>
 	inline auto RasterizeToFragments
@@ -196,7 +196,7 @@ namespace PA
 
 
 	template<typename TF>
-	auto RasterizeToFragments(const QuadraticBezier<TF, 2>& curve, Array<Fragment>& fragments, U32 width, U32 height) -> V
+	auto RasterizeToFragments(const QuadraticBezier<TF, 2>& curve, Array<Fragment>& fragments, U32 width, U32 height, TF color) -> V
 	{
 		static constexpr TF splitCutoff = 8;
 		static constexpr TF valThreshold = TF(0.0001);
@@ -235,7 +235,7 @@ namespace PA
 
 						auto pixelCenter = Vector<TF, 2>(j, i) + TF(0.5);
 						auto dist = current.GetDistanceFrom(pixelCenter);
-						auto val = Max(TF(0), TF(1) - SmoothStep(TF(0), TF(1), dist));
+						auto val = color * Max(TF(0), TF(1) - SmoothStep(TF(0), TF(1), dist));
 						if (val > valThreshold)
 						{
 							fragments.emplace_back(idx, val);
