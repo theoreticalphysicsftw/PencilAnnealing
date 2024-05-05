@@ -65,9 +65,11 @@ namespace PA
 		template <typename T>
 		auto ToSurfaceCoordinates(const Vector<T, 2>& in) const -> Vector<T, 2>;
 		template <typename T>
-		auto ToNormalizedCoordinates(const Vector<T, 2>& inSurface) const -> Vector<T, 2>;
-		template <typename T>
 		auto ToSurfaceCoordinates(Span<Vector<T, 2>> in) const -> V;
+		template <typename T>
+		auto ToNormalizedCoordinates(const Vector<T, 2>& inSurface) const->Vector<T, 2>;
+		template <typename T>
+		auto ToNormalizedCoordinates(Span<Vector<T, 2>> in) const->V;
 
 		template <typename T>
 		auto Clear(T clearValue = T(0)) -> V;
@@ -140,6 +142,15 @@ namespace PA
 		result[0] = inSurface[0] / (width - 1);
 		result[1] = TF(1) - inSurface[1] / (height - 1);
 		return result;
+	}
+
+	template<typename T>
+	inline auto RawCPUImage::ToNormalizedCoordinates(Span<Vector<T, 2>> in) const -> V
+	{
+		for (auto& vec : in)
+		{
+			vec = ToNormalizedCoordinates(vec);
+		}
 	}
 
 
