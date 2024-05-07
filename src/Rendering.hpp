@@ -144,12 +144,12 @@ namespace PA
 				auto centroid = current.GetCentroid();
 				auto x = U16(centroid[0]);
 				auto y = U16(centroid[1]);
-				auto i = LebesgueCurve(x, y);
-				if (i >= img.data.size())
+				if (x >= img.width || y >= img.height)
 				{
 					continue;
 				}
 
+				auto i = LebesgueCurve(x, y);
 				auto pixelCenter = Vector<TF, 2>(x, y) + TF(0.5);
 				auto dist = current.GetDistanceFrom(pixelCenter);
 				auto val = SmoothStep(TF(0), TF(1), dist);
@@ -201,7 +201,6 @@ namespace PA
 		static constexpr TF splitCutoff = 8;
 		static constexpr TF valThreshold = TF(0.0001);
 		fragments.clear();
-		auto imgSize = width * height;
 		auto screenCurve = curve;
 		ToSurfaceCoordinates(Span<Vector<TF, 2>>(screenCurve.points), width, height);
 
@@ -219,20 +218,20 @@ namespace PA
 			if (roughApproxLength <= splitCutoff)
 			{
 				auto bBox = current.GetBBox();
-				auto xMin = Min(U32(Max(TF(0), Floor(bBox.lower[0]))), imgSize);
-				auto xMax = Min(U32(Max(TF(0), Ceil(bBox.upper[0]))), imgSize);
-				auto yMin = Min(U32(Max(TF(0), Floor(bBox.lower[1]))), imgSize);
-				auto yMax = Min(U32(Max(TF(0), Ceil(bBox.upper[1]))), imgSize);
+				auto xMin = Min(U32(Max(TF(0), Floor(bBox.lower[0]))), height);
+				auto xMax = Min(U32(Max(TF(0), Ceil(bBox.upper[0]))), height);
+				auto yMin = Min(U32(Max(TF(0), Floor(bBox.lower[1]))), width);
+				auto yMax = Min(U32(Max(TF(0), Ceil(bBox.upper[1]))), width);
 				for (auto i = yMin ; i <= yMax; ++i)
 				{
 					for (auto j = xMin ; j <= xMax; ++j)
 					{
-						auto idx = LebesgueCurve(j, i);
-						if (idx >= imgSize)
+						if (j >= width || i >= height)
 						{
 							break;
 						}
 
+						auto idx = LebesgueCurve(j, i);
 						auto pixelCenter = Vector<TF, 2>(j, i) + TF(0.5);
 						auto dist = current.GetDistanceFrom(pixelCenter);
 						auto val = color * Max(TF(0), TF(1) - SmoothStep(TF(0), TF(1), dist));
@@ -322,7 +321,7 @@ namespace PA
 
 	inline auto CopyHDRSurfaceToGSSurface(RawCPUImage& hdr, RawCPUImage& sdr) -> V
 	{
-		auto imgSize = hdr.width * hdr.width;
+		auto extentSize = sdr.data.size();
 		PA_ASSERT(hdr.width == sdr.width && sdr.height == hdr.height);
 		PA_ASSERT(hdr.format == EFormat::A32Float);
 		PA_ASSERT(sdr.format == EFormat::A8);
@@ -330,7 +329,7 @@ namespace PA
 		auto hdrPtr = (F32*)hdr.data.data();
 		auto sdrPtr = (U8*)sdr.data.data();
 
-		for (auto i = 0u; i < imgSize; ++i)
+		for (auto i = 0u; i < extentSize; ++i)
 		{
 			sdrPtr[i] = ClampedU8(hdrPtr[i] * 255);
 		}

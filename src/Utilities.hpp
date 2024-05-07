@@ -53,6 +53,8 @@ namespace PA
 	template <typename T>
 	inline auto Min(const T& v0, const T& v1) -> T;
 
+
+	inline auto RoundToPowerOfTwo(U32 x) -> U32;
 	inline auto InterleaveBits(U16 n) -> U32;
 	inline auto DeinterleaveBits(U32 n) -> U16;
 	inline auto LebesgueCurve(U16 x, U16 y) -> U32;
@@ -145,6 +147,18 @@ namespace PA
 		return r0 | (r1 << 1u);
 	}
 
+
+	inline auto RoundToPowerOfTwo(U32 x) -> U32
+	{
+		x--;
+		x |= x >> 1;
+		x |= x >> 2;
+		x |= x >> 4;
+		x |= x >> 8;
+		x |= x >> 16;
+		x++;
+		return x;
+	}
 
 	inline auto LebesgueCurveInverse(U32 n) -> Pair<U16, U16>
 	{

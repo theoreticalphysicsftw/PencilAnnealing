@@ -78,9 +78,9 @@ namespace PA
 		RawCPUImage result(input.width, input.height, EFormat::A32Float, true);
 		PA_ASSERT(input.lebesgueOrdered);
 
-		auto imgSize = input.width * input.height;
+		auto extentSize = input.lebesgueStride * input.lebesgueStride;
 		auto tasksCount = threadPool.GetMaxTasks();
-		auto pixelsPerTask = imgSize / tasksCount;
+		auto pixelsPerTask = extentSize / tasksCount;
 
 		auto task =
 		[&] (U32 start, U32 end)
@@ -125,7 +125,7 @@ namespace PA
 		{
 			results.emplace_back(threadPool.AddTask(task, i * pixelsPerTask, (i + 1) * pixelsPerTask));
 		}
-		task(pixelsPerTask * tasksCount, imgSize);
+		task(pixelsPerTask * tasksCount, extentSize);
 
 		for (auto& res : results)
 		{
@@ -137,20 +137,26 @@ namespace PA
 
 	inline auto SobelEdgeDetect(ThreadPool<>& threadPool, const RawCPUImage& input, F32 threshold) -> RawCPUImage
 	{
+		PA_ASSERT(input.lebesgueOrdered);
 		RawCPUImage result(input.width, input.height, input.format, true);
 
 		auto gX = Convolute(threadPool, SobelX<F32, 1>, input);
 		auto resultF = Convolute(threadPool, SobelY<F32, 1>, gX);
 
-		auto imgSize = input.width * input.height;
+		auto extentSize = input.lebesgueStride * input.lebesgueStride;
 		auto tasksCount = threadPool.GetMaxTasks();
-		auto pixelsPerTask = imgSize / tasksCount;
+		auto pixelsPerTask = extentSize / tasksCount;
 
 		auto task =
 		[&](U32 start, U32 end)
 		{
 			for (auto i = start; i < end; ++i)
 			{
+				auto coords = LebesgueCurveInverse(i);
+				if (coords.first >= input.width || coords.second >= input.height)
+				{
+					continue;
+				}
 				// TODO: Handle more formats.
 				result.data[i] = (((F32*) resultF.data.data())[i] < threshold)? 255 : 0;
 			}
@@ -161,7 +167,7 @@ namespace PA
 		{
 			results.emplace_back(threadPool.AddTask(task, i * pixelsPerTask, (i + 1) * pixelsPerTask));
 		}
-		task(pixelsPerTask * tasksCount, imgSize);
+		task(pixelsPerTask * tasksCount, extentSize);
 
 		for (auto& res : results)
 		{
@@ -173,20 +179,26 @@ namespace PA
 
 	inline auto GradientMagnitude(ThreadPool<>& threadPool, const RawCPUImage& input) -> RawCPUImage
 	{
+		PA_ASSERT(input.lebesgueOrdered);
 		RawCPUImage result(input.width, input.height, input.format, true);
 
 		auto gX = Convolute(threadPool, SobelX<F32, 1>, input);
 		auto gY = Convolute(threadPool, SobelY<F32, 1>, input);
 
-		auto imgSize = input.width * input.height;
+		auto extentSize = input.lebesgueStride * input.lebesgueStride;
 		auto tasksCount = threadPool.GetMaxTasks();
-		auto pixelsPerTask = imgSize / tasksCount;
+		auto pixelsPerTask = extentSize / tasksCount;
 
 		auto task =
 		[&] (U32 start, U32 end)
 		{
 			for (auto i = start; i < end; ++i)
 			{
+				auto coords = LebesgueCurveInverse(i);
+				if (coords.first >= input.width || coords.second >= input.height)
+				{
+					continue;
+				}
 				// TODO: Handle more formats.
 				auto gXV = ((F32*)gX.data.data())[i];
 				auto gYV = ((F32*)gY.data.data())[i];
@@ -201,7 +213,7 @@ namespace PA
 		{
 			results.emplace_back(threadPool.AddTask(task, i * pixelsPerTask, (i + 1) * pixelsPerTask));
 		}
-		task(pixelsPerTask * tasksCount, imgSize);
+		task(pixelsPerTask * tasksCount, extentSize);
 
 		for (auto& res : results)
 		{

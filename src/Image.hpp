@@ -59,6 +59,7 @@ namespace PA
 		U32 height;
 		U32 width;
 		Array<Byte> data;
+		U32 lebesgueStride;
 
 		RawCPUImage(U32 width = 0, U32 height = 0, EFormat format = EFormat::Invalid, B lebesgueOrdered = false);
 
@@ -124,7 +125,17 @@ namespace PA
 	inline RawCPUImage::RawCPUImage(U32 width, U32 height, EFormat format, B lebesgueOrdered) :
 		width(width), height(height), format(format), lebesgueOrdered(lebesgueOrdered)
 	{
-		data.resize(height * width * GetSize(format));
+		if (lebesgueOrdered)
+		{
+			auto maxDim = Max(width, height);
+			lebesgueStride = RoundToPowerOfTwo(maxDim);
+			data.resize(lebesgueStride * lebesgueStride * GetSize(format));
+		}
+		else
+		{
+			data.resize(height * width * GetSize(format));
+		}
+
 	}
 
 
@@ -164,7 +175,8 @@ namespace PA
 	template<typename T>
 	inline auto RawCPUImage::Clear(T clearValue) -> V
 	{
-		auto maxExtent = width * height;
+		auto maxDim = Max(height, width);
+		auto maxExtent = lebesgueOrdered? maxDim * maxDim : width * height;
 		auto tPtr = (T*)data.data();
 
 		for (auto i = 0u; i < maxExtent; ++i)
@@ -176,10 +188,11 @@ namespace PA
 	template<typename T>
 	inline auto RawCPUImage::Clear(T clearValue, ThreadPool<>& threadPool) -> V
 	{
-		auto imgSize = height * width;
+		auto maxDim = Max(height, width);
+		auto maxExtent = lebesgueOrdered ? maxDim * maxDim : width * height;
 		auto tPtr = (T*)data.data();
 		auto taskCount = GetLogicalCPUCount();
-		auto pixelsPerTask = imgSize / taskCount;
+		auto pixelsPerTask = maxExtent / taskCount;
 
 		auto task =
 			[&](U32 start, U32 end)
@@ -197,7 +210,7 @@ namespace PA
 		}
 
 		// Remainder
-		task(pixelsPerTask * taskCount, imgSize);
+		task(pixelsPerTask * taskCount, maxExtent);
 
 		for (auto& result : results)
 		{

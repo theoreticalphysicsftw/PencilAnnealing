@@ -47,15 +47,12 @@ namespace PA
 		~Annealer();
 		auto CopyCurrentApproximationToColor(ColorU32* data, U32 stride) -> V;
 		auto AnnealBezier() -> B;
-
-		auto DrawLinesToSurface(const QuadTree<Line>& lines, RawCPUImage& img) -> Pair<U32, U32>;
-
 		auto ShutDownThreadPool() -> V;
 
 	private:
         static constexpr U32 logAfterSteps = 1024;
+		static constexpr U32 updateScreenAfterSteps = 4096;
 
-		auto GetEnergy(const RawCPUImage& img0, Pair<U32, U32> extent) -> TF;
 		auto GetEnergy(const RawCPUImage& img0) -> TF;
 
 		auto InitBezier() -> V;
@@ -81,6 +78,7 @@ namespace PA
 		Scalar optimalEnergy;
 		U32 step = 0;
 
+		Mutex currentApproximationLock;
 		ThreadPool<> threadPool;
 	};
 }
@@ -95,9 +93,14 @@ namespace PA
 		workingApproximation(reference->width, reference->height, EFormat::A8, true),
 		workingApproximationHDR(reference->width, reference->height, EFormat::A32Float, true)
 	{
-		for (auto i = 0u; i < reference->width; ++i)
+		grayscaleReference.Clear(Byte(255));
+		currentApproximation.Clear(Byte(255));
+		workingApproximation.Clear(Byte(255));
+		workingApproximationHDR.Clear(F32(1.0));
+
+		for (auto i = 0u; i < reference->height; ++i)
 		{
-			for (auto j = 0u; j < reference->height; ++j)
+			for (auto j = 0u; j < reference->width; ++j)
 			{
 				auto idx = LebesgueCurve(j, i);
 				auto inColor = ((ColorU32*)reference->data.data())[i * reference->width + j];
@@ -106,21 +109,11 @@ namespace PA
 			}
 		}
 
-		for (auto i = 0u; i < currentApproximation.data.size(); ++i)
-		{
-			currentApproximation.data[i] = 255u;
-			workingApproximation.data[i] = 255u;
-		}
-
-		currentApproximation.Clear(Byte(255));
-		workingApproximation.Clear(Byte(255));
-		workingApproximationHDR.Clear(F32(1.0));
-
 		grayscaleReferenceEdges = GradientMagnitude(threadPool, grayscaleReference);
 
 		FindEdgeSupport();
 
-		this->maxStrokes = maxStrokes ? maxStrokes : (reference->width * reference->height / 1024);
+		this->maxStrokes = maxStrokes ? maxStrokes : (reference->width * reference->height / 256);
 		this->maxSteps = maxSteps ? maxSteps : (1u << 25);
 		this->maxTemperature = 255 * 255;
 		temperature = maxTemperature;
@@ -141,8 +134,7 @@ namespace PA
 	{
 		for (auto i = 0u; i < maxStrokes; ++i)
 		{
-			auto strokeLength = SmoothStep(TF(1) / grayscaleReference.width, TF(0.2), TF(0.2) * (1 - TF(i + 1) / maxStrokes));
-			strokes.push_back(GetRandom2DQuadraticBezierInRange(strokeLength));
+			strokes.push_back(GetRandom2DQuadraticBezierInRange(TF(1)));
 		}
 		fragmentsMap.resize(strokes.size());
 		RasterizeToFragments(Span<const QuadraticBezier>(strokes), fragmentsMap, grayscaleReference.width, grayscaleReference.height, threadPool);
@@ -153,12 +145,15 @@ namespace PA
 	template<typename TF>
 	inline auto Annealer<TF>::FindEdgeSupport() -> V
 	{
-		auto imgSize = grayscaleReferenceEdges.width * grayscaleReferenceEdges.height;
-		for (auto i = 0; i < imgSize; ++i)
+		for (auto i = 0; i < grayscaleReferenceEdges.height; ++i)
 		{
-			if (grayscaleReferenceEdges.data[i] < 255)
+			for (auto j = 0; j < grayscaleReferenceEdges.width; ++j)
 			{
-				edgeSupport.push_back(i);
+				auto idx = LebesgueCurve(j, i);
+				if (grayscaleReferenceEdges.data[idx] < 255)
+				{
+					edgeSupport.push_back(idx);
+				}
 			}
 		}
 	}
@@ -167,15 +162,17 @@ namespace PA
 	template<typename TF>
 	inline auto Annealer<TF>::CopyCurrentApproximationToColor(ColorU32* data, U32 stride) -> V
 	{
-		for (auto i = 0u; i < this->currentApproximation.width; ++i)
+		currentApproximationLock.lock();
+		for (auto i = 0u; i < this->currentApproximation.height; ++i)
 		{
-			for (auto j = 0u; j < this->currentApproximation.height; ++j)
+			for (auto j = 0u; j < this->currentApproximation.width; ++j)
 			{
 				auto idx = LebesgueCurve(j, i);
-				auto inColor = this->currentApproximation.data[idx];
+				auto inColor = this->grayscaleReferenceEdges.data[idx];
 				data[i * stride / 4 + j] = ColorU32(inColor, inColor, inColor, 255);
 			}
 		}
+		currentApproximationLock.unlock();
 	}
 
 	template<typename TF>
@@ -187,7 +184,7 @@ namespace PA
 			return false;
 		}
 
-		temperature = temperature * TF(0.99);
+		temperature = temperature * TF(0.999);
 
 		auto strokeIdx = GetUniformU32(0, strokes.size() - 1);
 
@@ -195,13 +192,23 @@ namespace PA
 		auto& oldFragments = fragmentsMap[strokeIdx];
 
 		auto s0 = GetUniformU32(0, edgeSupport.size() - 1);
-		auto s1 = GetUniformU32(0, edgeSupport.size() - 1);
-		auto s2 = GetUniformU32(0, edgeSupport.size() - 1);
-		auto p0 = LebesgueCurveInverse(edgeSupport[s0]);
-		auto p1 = LebesgueCurveInverse(edgeSupport[s1]);
-		auto p2 = LebesgueCurveInverse(edgeSupport[s2]);
+		//auto s1 = GetUniformU32(0, edgeSupport.size() - 1);
+		//auto s2 = GetUniformU32(0, edgeSupport.size() - 1);
+		//auto p0 = LebesgueCurveInverse(edgeSupport[s0]);
+		//auto p1 = LebesgueCurveInverse(edgeSupport[s1]);
+		//auto p2 = LebesgueCurveInverse(edgeSupport[s2]);
 
-		auto newCurve = GetBezierPassingThrough(Vec(p0.first, p0.second), Vec(p1.first, p1.second), Vec(p2.first, p2.second));
+		auto maxLength = grayscaleReference.width * TF(0.1);
+		auto length = GetUniformFloat(TF(3), maxLength);
+		auto p1U = LebesgueCurveInverse(edgeSupport[s0]);
+		auto p1 = Vec(p1U.first, p1U.second);
+		auto a0 = GetUniformFloat(TF(0), Constants<TF>::C2Pi);
+		auto a2 = GetUniformFloat(TF(0), Constants<TF>::C2Pi);
+		auto p0 = p1 + length * Vec(Cos(a0), Sin(a0));
+		auto p2 = p1 + length * Vec(Cos(a2), Sin(a2));
+		auto newCurve = GetBezierPassingThrough(p0, p1, p2);
+
+		//auto newCurve = GetBezierPassingThrough(Vec(p0.first, p0.second), Vec(p1.first, p1.second), Vec(p2.first, p2.second));
 		grayscaleReference.ToNormalizedCoordinates(Span<Vec>(newCurve.points));
 		auto newColor = GetUniformFloat(TF(0), TF(1));
 		//auto newCurve = GetRandom2DQuadraticBezierInRange(TF(1));
@@ -223,10 +230,6 @@ namespace PA
 			optimalEnergy = currentEnergy;
 			oldFragments = newFragments;
 			oldCurve = newCurve;
-			if (!(step % logAfterSteps) || step == maxSteps - 1)
-			{
-				currentApproximation = workingApproximation;
-			}
 		}
 		else
 		{
@@ -234,6 +237,13 @@ namespace PA
 			PutFragmentsOnHDRSurface(oldFragments, workingApproximationHDR);
 			CopyHDRSurfaceToGSSurface(workingApproximationHDR, workingApproximation, oldFragments);
 			CopyHDRSurfaceToGSSurface(workingApproximationHDR, workingApproximation, newFragments);
+		}
+
+		if (!(step % updateScreenAfterSteps) || step == maxSteps - 1)
+		{
+			currentApproximationLock.lock();
+			currentApproximation = workingApproximation;
+			currentApproximationLock.unlock();
 		}
 
 		if (!(step % logAfterSteps))
@@ -254,9 +264,10 @@ namespace PA
 
 
 	template<typename TF>
-	inline auto Annealer<TF>::GetEnergy(const RawCPUImage& img, Pair<U32, U32> extent) -> TF
+	inline auto Annealer<TF>::GetEnergy(const RawCPUImage& img) -> TF
 	{
-		auto extentSize = extent.second - extent.first;
+		auto extentSize = img.lebesgueStride * img.lebesgueStride;
+		auto imgSize = img.width * img.height;
 		auto taskCount = GetLogicalCPUCount();
 		auto pixelsPerTask = extentSize / taskCount;
 
@@ -266,14 +277,17 @@ namespace PA
 			TF energy = 0;
 			for (auto i = start; i < end; ++i)
 			{
-				auto diff = TF(grayscaleReference.data[i]) - TF(img.data[i]);
-				energy += 0.1 * (diff * diff) / extentSize;
-			}
+				auto coords = LebesgueCurveInverse(i);
+				if (coords.first >= img.width || coords.second >= img.height)
+				{
+					continue;
+				}
 
-			for (auto i = start; i < end; ++i)
-			{
-				auto diff = TF(grayscaleReferenceEdges.data[i]) - TF(img.data[i]);
-				energy += 0.9 * (diff * diff) / extentSize;
+				auto diff0 = TF(grayscaleReference.data[i]) - TF(img.data[i]);
+				energy += 0.1 * (diff0 * diff0) / imgSize;
+
+				auto diff1 = TF(grayscaleReferenceEdges.data[i]) - TF(img.data[i]);
+				energy += 0.9 * (diff1 * diff1) / imgSize;
 			}
 			return energy;
 		};
@@ -281,11 +295,11 @@ namespace PA
 		Array<TaskResult<TF>> results;
 		for (auto i = 0u; i < taskCount; ++i)
 		{
-			results.emplace_back(threadPool.AddTask(task, extent.first + i * pixelsPerTask, extent.first + (i + 1) * pixelsPerTask));
+			results.emplace_back(threadPool.AddTask(task, i * pixelsPerTask, (i + 1) * pixelsPerTask));
 		}
 
 		// Remainder
-		task(extent.first + pixelsPerTask * taskCount, extent.second);
+		task(pixelsPerTask * taskCount, extentSize);
 
 		TF energy = 0;
 		for (auto& result : results)
@@ -294,13 +308,5 @@ namespace PA
 		}
 
 		return energy;
-	}
-
-
-	template<typename TF>
-	inline auto Annealer<TF>::GetEnergy(const RawCPUImage& img) -> TF
-	{
-		auto imgSize = img.width * img.height;
-		return GetEnergy(img, Pair<U32, U32>(0u, imgSize));
 	}
 }
