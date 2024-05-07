@@ -30,11 +30,37 @@
 
 using namespace PA;
 
+static constexpr StrView CDefaultInImagePath = "in.webp"sv;
+
 I32 main(I32 argc, C** argv)
 {
-	auto rawImage = DecodeWebP(GEmbeddedTestImageData, CEmbeddedTestImageSize);
-	PA_ASSERT(PresentSurface::Init(rawImage.width, rawImage.height));
-	Annealer<F32> annealer(&rawImage);
+	Span<const Byte> rawImageData;
+	Array<Byte> utilityBufer;
+	if (argc > 1)
+	{
+		ReadWholeFile(argv[1], utilityBufer);
+		rawImageData = Span<const Byte>(utilityBufer);
+	}
+	else if (FileExists(CDefaultInImagePath))
+	{
+		ReadWholeFile(CDefaultInImagePath, utilityBufer);
+		rawImageData = Span<const Byte>(utilityBufer);
+	}
+	else
+	{
+		rawImageData = Span<const Byte>(GEmbeddedTestImageData, CEmbeddedTestImageSize);
+	}
+
+	auto decodedImage = DecodeWebP(rawImageData);
+
+	if (decodedImage.data.empty())
+	{
+		Log("Cannot read input image.");
+		return 1;
+	}
+
+	PA_ASSERT(PresentSurface::Init(decodedImage.width, decodedImage.height));
+	Annealer<F32> annealer(&decodedImage);
 
 	Thread annealingThread([&]() { while (!PresentSurface::IsClosed() && annealer.AnnealBezier()); annealer.ShutDownThreadPool(); });
 

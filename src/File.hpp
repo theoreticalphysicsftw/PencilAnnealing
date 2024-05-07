@@ -26,11 +26,15 @@
 #include "Types.hpp"
 
 #include <cstdio>
+#include <filesystem>
 
 namespace PA
 {
 	inline auto ReadWholeFile(StrView path, Array<Byte>& data) -> B;
 	inline auto WriteWholeFile(StrView path, Span<const Byte> data) -> B;
+    inline auto FileExists(StrView path) -> B;
+
+    using Path = std::filesystem::path;
 }
 
 
@@ -75,4 +79,14 @@ namespace PA
 
         return true;
 	}
+
+    inline auto FileExists(StrView p) -> B
+    {
+        Path path(p);
+        if (std::filesystem::is_regular_file(path))
+        {
+            return true;
+        }
+        return false;
+    }
 }
