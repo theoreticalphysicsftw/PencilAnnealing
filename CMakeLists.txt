@@ -37,8 +37,10 @@ file(
 file(
         GLOB
         LIBWEBP_SOURCES
+        "extern/libwebp/src/enc/*.c"
         "extern/libwebp/src/dec/*.c"
         "extern/libwebp/src/dsp/*.c"
+        "extern/libwebp/src/mux/*.c"
         "extern/libwebp/src/demux/*.c"
         "extern/libwebp/src/utils/*.c"
     )
