@@ -168,7 +168,7 @@ namespace PA
 			for (auto j = 0u; j < this->currentApproximation.width; ++j)
 			{
 				auto idx = LebesgueCurve(j, i);
-				auto inColor = this->grayscaleReferenceEdges.data[idx];
+				auto inColor = this->currentApproximation.data[idx];
 				data[i * stride / 4 + j] = ColorU32(inColor, inColor, inColor, 255);
 			}
 		}
