@@ -218,10 +218,10 @@ namespace PA
 			if (roughApproxLength <= splitCutoff)
 			{
 				auto bBox = current.GetBBox();
-				auto xMin = Min(U32(Max(TF(0), Floor(bBox.lower[0]))), height);
-				auto xMax = Min(U32(Max(TF(0), Ceil(bBox.upper[0]))), height);
-				auto yMin = Min(U32(Max(TF(0), Floor(bBox.lower[1]))), width);
-				auto yMax = Min(U32(Max(TF(0), Ceil(bBox.upper[1]))), width);
+				auto xMin = Min(U32(Max(TF(0), Floor(bBox.lower[0]))), width);
+				auto xMax = Min(U32(Max(TF(0), Ceil(bBox.upper[0]))), width);
+				auto yMin = Min(U32(Max(TF(0), Floor(bBox.lower[1]))), height);
+				auto yMax = Min(U32(Max(TF(0), Ceil(bBox.upper[1]))), height);
 				for (auto i = yMin ; i <= yMax; ++i)
 				{
 					for (auto j = xMin ; j <= xMax; ++j)
