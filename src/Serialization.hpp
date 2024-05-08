@@ -21,15 +21,59 @@
 // SOFTWARE.
 
 #include "Bezier.hpp"
+#include "Rendering.hpp"
 #include "Image.hpp"
 #include "File.hpp"
 #include "Utilities.hpp"
+#include "Concepts.hpp"
 
 namespace PA
 {
 	template <typename TF>
 	inline auto SerializeToSVG(Span<const QuadraticBezier<TF, 2>> normalizedCoords, U32 width, U32 height, StrView outFile = "out.svg"sv);
 
+	template <typename T>
+		requires CIsArithmetic<T>
+	inline auto Serialize(Array<Byte>& outBuffer, T in) -> B;
+
+	template <typename T, U32 Dim>
+	inline auto Serialize(Array<Byte>& outBuffer, Vector<T, Dim> in) -> B;
+
+	template <typename T, U32 Dim>
+	inline auto Serialize(Array<Byte>& outBuffer, QuadraticBezier<T, Dim> in) -> B;
+
+	template <typename T>
+	inline auto Serialize(Array<Byte>& outBuffer, Span<const T> in) -> B;
+
+	template <typename T>
+	inline auto Serialize(Array<Byte>& outBuffer, const Array<T>& in) -> B;
+
+	template<typename T>
+		requires CIsArithmetic<T>
+	auto Serialize(Span<Byte>& outBuffer, T in) -> B;
+
+	template<typename T>
+	auto Serialize(Span<Byte>& outBuffer, Span<const T> in) -> B;
+
+	inline auto Serialize(Array<Byte>& outBuffer, Fragment frag) -> B;
+
+	template <typename T>
+		requires CIsArithmetic<T>
+	inline auto Deserialize(Span<const Byte>& inBuffer, T& out) -> B;
+
+	template <typename T, U32 Dim>
+	inline auto Deserialize(Span<const Byte>& inBuffer, Vector<T, Dim>& out) -> B;
+
+	template <typename T, U32 Dim>
+	inline auto Deserialize(Span<const Byte>& inBuffer, QuadraticBezier<T, Dim>& out) -> B;
+
+	template <typename T>
+	inline auto Deserialize(Span<const Byte>& inBuffer, Span<T> outBuffer) -> B;
+
+	template <typename T>
+	inline auto Deserialize(Span<const Byte>& inBuffer, Array<T>& outBuffer) -> B;
+
+	inline auto Deserialize(Span<const Byte>& inBuffer, Fragment& frag) -> B;
 }
 
 namespace PA
@@ -65,4 +109,181 @@ namespace PA
 		WriteWholeFile(outFile, { (const Byte*)svg.data(), svg.size() });
 	}
 
+
+	template<typename T>
+		requires CIsArithmetic<T>
+	auto Serialize(Array<Byte>& outBuffer, T in) -> B
+	{
+		auto oldSize = outBuffer.size();
+		outBuffer.resize(oldSize + sizeof(T));
+		in = FromLE(in);
+		MemCopy(Span<const T>((const T*)&in, 1), outBuffer.data() + oldSize);
+		return true;
+	}
+
+	template<typename T, U32 Dim>
+	auto Serialize(Array<Byte>& outBuffer, Vector<T, Dim> in) -> B
+	{
+		return Serialize(outBuffer, Span<const T>(in.data.data(), Dim));
+	}
+
+	template<typename T, U32 Dim>
+	auto Serialize(Array<Byte>& outBuffer, QuadraticBezier<T, Dim> in) -> B
+	{
+		using Vec = Vector<T, Dim>;
+		return Serialize(outBuffer, Span<const Vec>((const Vec*)in.points.data(), 3));
+	}
+
+
+	template<typename T>
+	auto Serialize(Array<Byte>& outBuffer, Span<const T> in) -> B
+	{
+		Serialize(outBuffer, (U32)in.size());
+		for (const auto& x : in)
+		{
+			Serialize(outBuffer, x);
+		}
+		return true;
+	}
+
+	template<typename T>
+	auto Serialize(Array<Byte>& outBuffer, const Array<T>& in) -> B
+	{
+		Serialize(outBuffer, (U32)in.size());
+		for (const auto& x : in)
+		{
+			Serialize(outBuffer, x);
+		}
+		return true;
+	}
+
+
+	template<typename T>
+		requires CIsArithmetic<T>
+	auto Serialize(Span<Byte>& outBuffer, T in) -> B
+	{
+		if (outBuffer.size() < sizeof(T))
+		{
+			return false;
+		}
+
+		in = FromLE(in);
+		MemCopy(Span<const T>(&in, 1), outBuffer.data());
+
+		outBuffer = outBuffer.subspan(sizeof(T));
+		return true;
+	}
+
+
+	template<typename T>
+	auto Serialize(Span<Byte>& outBuffer, Span<const T> in) -> B
+	{
+		if (outBuffer.size() < sizeof(T) * in.size() + sizeof(U32))
+		{
+			return false;
+		}
+
+		Serialize(outBuffer, (U32)in.size());
+		for (auto& x : in)
+		{
+			Serialize(outBuffer, x);
+		}
+
+		return true;
+	}
+
+
+	inline auto PA::Serialize(Array<Byte>& outBuffer, Fragment frag) -> B
+	{
+		return Serialize(outBuffer, frag.idx) && Serialize(outBuffer, frag.value);
+	}
+
+
+	template<typename T>
+		requires CIsArithmetic<T>
+	auto Deserialize(Span<const Byte>& inBuffer, T& out) -> B
+	{
+		if (inBuffer.size() < sizeof(T))
+		{
+			return false;
+		}
+		MemCopy(inBuffer.subspan(0, sizeof(T)), &out);
+		out = FromLE(out);
+		inBuffer = inBuffer.subspan(sizeof(T));
+		return true;
+	}
+
+
+	template<typename T, U32 Dim>
+	auto Deserialize(Span<const Byte>& inBuffer, Vector<T, Dim>& out) -> B
+	{
+		return Deserialize(inBuffer, Span<T>(out.data.data(), Dim));
+	}
+
+
+	template<typename T, U32 Dim>
+	auto Deserialize(Span<const Byte>& inBuffer, QuadraticBezier<T, Dim>& out) -> B
+	{
+		using Vec = Vector<T, Dim>;
+		return Deserialize(inBuffer, Span<Vec>((Vec*)out.points.data(), 3));
+	}
+
+
+	template<typename T>
+	auto Deserialize(Span<const Byte>& inBuffer, Span<T> outBuffer) -> B
+	{
+		if (inBuffer.size() < sizeof(U32))
+		{
+			return false;
+		}
+
+		U32 arraySize;
+		Deserialize(inBuffer, arraySize);
+
+		if (inBuffer.size() < arraySize)
+		{
+			return false;
+		}
+
+		for (auto i = 0u; i < arraySize; ++i)
+		{
+			Deserialize(inBuffer, outBuffer[i]);
+		}
+
+		return true;
+	}
+
+
+	template<typename T>
+	auto Deserialize(Span<const Byte>& inBuffer, Array<T>& outBuffer) -> B
+	{
+		if (inBuffer.size() < sizeof(U32))
+		{
+			return false;
+		}
+
+		U32 arraySize;
+		Deserialize(inBuffer, arraySize);
+
+
+		if (inBuffer.size() < arraySize)
+		{
+			return false;
+		}
+
+		auto oldSize = outBuffer.size();
+		outBuffer.resize(oldSize + arraySize);
+
+		for (auto i = 0; i < arraySize; ++i)
+		{
+			Deserialize(inBuffer, outBuffer[oldSize + i]);
+		}
+
+		return true;
+	}
+
+	inline auto PA::Deserialize(Span<const Byte>& inBuffer, Fragment& frag) -> B
+	{
+		return Deserialize(inBuffer, frag.idx) && Deserialize(inBuffer, frag.value);
+	}
 }
