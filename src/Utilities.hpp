@@ -25,6 +25,7 @@
 
 #include <cstring>
 #include <cstdlib>
+#include <bit>
 
 #include <algorithm>
 
@@ -42,6 +43,9 @@ namespace PA
 
 	template <class TContainer>
 	inline auto Fill(TContainer& c, const typename TContainer::value_type& value) -> V;
+
+	template <typename TFrom, typename TTo>
+	inline auto MemCopy(Span<const TFrom> from, TTo* to) -> V;
 	
 	template <typename T>
 		requires CIsArithmetic<T>
@@ -59,7 +63,11 @@ namespace PA
 	inline auto DeinterleaveBits(U32 n) -> U16;
 	inline auto LebesgueCurve(U16 x, U16 y) -> U32;
 	inline auto LebesgueCurveInverse(U32 n) -> Pair<U16, U16>;
-	
+
+	template <typename T>
+	inline auto FromLE(T x) -> T;
+	template <typename T>
+	inline auto FromBE(T x) -> T;
 }
 
 
@@ -95,6 +103,12 @@ namespace PA
 	inline auto Fill(TContainer& c, const typename TContainer::value_type& value) -> V
 	{
 		std::fill(c.begin(), c.end(), value);
+	}
+
+	template<typename TFrom, typename TTo>
+	auto MemCopy(Span<const TFrom> from, TTo* to) -> V
+	{
+		std::memcpy((V*)to, (const V*)from.data(), from.size() * sizeof(TFrom));
 	}
 
 
@@ -168,5 +182,81 @@ namespace PA
 		result.first = DeinterleaveBits(x);
 		result.second = DeinterleaveBits(y);
 		return result;
+	}
+
+	template <typename T>
+	auto ByteSwap(T x) -> T
+	{
+		T result;
+		auto bytes = (Byte*)&x;
+
+		for (auto i = 0u; i < sizeof(T); ++i)
+		{
+			result[i] = bytes[sizeof(T) - 1 - i];
+		}
+
+		return result;
+	}
+
+	template <typename T>
+		requires (sizeof(T) == 2)
+	auto ByteSwap(T x) -> T
+	{
+		T result;
+		auto uXPtr = (U16*)&x;
+		*((U16*)&result) = (*uXPtr << 8) | ((*uXPtr) >> 8);
+		return result;
+	}
+
+	template <typename T>
+		requires (sizeof(T) == 4)
+	auto ByteSwap(T x) -> T
+	{
+		T result;
+		auto uXPtr = (U32*)&x;
+		*((U32*)&result) =
+			((*uXPtr & 0xFF000000u) >> 24) |
+			((*uXPtr & 0x00FF0000u) >> 8) |
+			((*uXPtr & 0x0000FF00u) << 8) |
+			((*uXPtr & 0x000000FFu) << 24);
+		return result;
+	}
+
+	template <typename T>
+		requires (sizeof(T) == 8)
+	auto ByteSwap(T x) -> T
+	{
+		T result;
+		auto uXPtr = (U64*)&x;
+		*((U64*)&result) =
+			((*uXPtr & 0xFF00000000000000ull) >> 56) |
+			((*uXPtr & 0x00FF000000000000ull) >> 40) |
+			((*uXPtr & 0x0000FF0000000000ull) >> 24) |
+			((*uXPtr & 0x000000FF00000000ull) >> 8) |
+			((*uXPtr & 0x00000000FF000000ull) << 8) |
+			((*uXPtr & 0x0000000000FF0000ull) << 24) |
+			((*uXPtr & 0x000000000000FF00ull) << 40) |
+			((*uXPtr & 0x00000000000000FFull) << 56);
+		return result;
+	}
+
+	template <typename T>
+	auto FromBE(T x) -> T
+	{
+		if constexpr (std::endian::native == std::endian::little)
+		{
+			return ByteSwap(x);
+		}
+		return x;
+	}
+
+	template <typename T>
+	auto FromLE(T x) -> T
+	{
+		if constexpr (std::endian::native == std::endian::big)
+		{
+			return ByteSwap(x);
+		}
+		return x;
 	}
 }
