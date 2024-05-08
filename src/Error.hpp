@@ -38,7 +38,7 @@
 		} \
     }
 #else
-#define PA_ASSERT(ARG) ARG
+#define PA_ASSERT(ARG)  (V)(ARG)
 #endif
 
 namespace PA

@@ -46,6 +46,6 @@ namespace PA
 
 	auto UsToS(F32 us) -> F32
 	{
-		return us / 1E6;
+		return us / 1E6f;
 	}
 }
