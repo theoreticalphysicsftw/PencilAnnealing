@@ -52,11 +52,15 @@ namespace PA
 	private:
         static constexpr U32 logAfterSteps = 1024;
 		static constexpr U32 updateScreenAfterSteps = 4096;
+		static constexpr StrView CSaveFile = "save.pa"sv;
 
 		auto GetEnergy(const RawCPUImage& img0) -> TF;
 
 		auto InitBezier() -> V;
 		auto FindEdgeSupport() -> V;
+
+		auto SaveProgress() -> V;
+		auto LoadProgress() -> V;
 
 		RawCPUImage grayscaleReference;
 		RawCPUImage grayscaleBlurredReference;
@@ -120,12 +124,25 @@ namespace PA
 
 		optimalEnergy = GetEnergy(currentApproximation);
 
-		InitBezier();
+		if (FileExists(CSaveFile))
+		{
+			LoadProgress();
+		}
+		else
+		{
+			InitBezier();
+		}
+		fragmentsMap.resize(strokes.size());
+		RasterizeToFragments(Span<const QuadraticBezier>(strokes), fragmentsMap, grayscaleReference.width, grayscaleReference.height, threadPool);
+		PutFragmentsOnHDRSurface(fragmentsMap, workingApproximationHDR);
+		CopyHDRSurfaceToGSSurface(workingApproximationHDR, workingApproximation);
+		currentApproximation = workingApproximation;
 	}
 
 	template<typename TF>
 	inline Annealer<TF>::~Annealer()
 	{
+		SaveProgress();
 		SerializeToSVG(Span<const QuadraticBezier>(strokes), grayscaleReference.width, grayscaleReference.height);
 	}
 
@@ -136,18 +153,14 @@ namespace PA
 		{
 			strokes.push_back(GetRandom2DQuadraticBezierInRange(TF(1)));
 		}
-		fragmentsMap.resize(strokes.size());
-		RasterizeToFragments(Span<const QuadraticBezier>(strokes), fragmentsMap, grayscaleReference.width, grayscaleReference.height, threadPool);
-		PutFragmentsOnHDRSurface(fragmentsMap, workingApproximationHDR);
-		CopyHDRSurfaceToGSSurface(workingApproximationHDR, workingApproximation);
 	}
 
 	template<typename TF>
 	inline auto Annealer<TF>::FindEdgeSupport() -> V
 	{
-		for (auto i = 0; i < grayscaleReferenceEdges.height; ++i)
+		for (auto i = 0u; i < grayscaleReferenceEdges.height; ++i)
 		{
-			for (auto j = 0; j < grayscaleReferenceEdges.width; ++j)
+			for (auto j = 0u; j < grayscaleReferenceEdges.width; ++j)
 			{
 				auto idx = LebesgueCurve(j, i);
 				if (grayscaleReferenceEdges.data[idx] < 255)
@@ -155,6 +168,44 @@ namespace PA
 					edgeSupport.push_back(idx);
 				}
 			}
+		}
+	}
+
+	template<typename TF>
+	inline auto Annealer<TF>::SaveProgress() -> V
+	{
+		Array<Byte> outBuffer;
+		if (step < maxSteps)
+		{
+			Serialize(outBuffer, this->maxSteps);
+			Serialize(outBuffer, this->maxStrokes);
+			Serialize(outBuffer, this->maxSteps);
+			Serialize(outBuffer, this->maxTemperature);
+			Serialize(outBuffer, this->step);
+			Serialize(outBuffer, this->temperature);
+			Serialize(outBuffer, this->optimalEnergy);
+			Serialize(outBuffer, this->strokes);
+			Serialize(outBuffer, this->fragmentsMap);
+		}
+		WriteWholeFile(CSaveFile, outBuffer);
+	}
+
+	template<typename TF>
+	inline auto Annealer<TF>::LoadProgress() -> V
+	{
+		Array<Byte> inBuffer;
+		if (ReadWholeFile(CSaveFile, inBuffer))
+		{
+			Span<const Byte> inData(inBuffer.data(), inBuffer.size());
+			Deserialize(inData, this->maxSteps);
+			Deserialize(inData, this->maxStrokes);
+			Deserialize(inData, this->maxSteps);
+			Deserialize(inData, this->maxTemperature);
+			Deserialize(inData, this->step);
+			Deserialize(inData, this->temperature);
+			Deserialize(inData, this->optimalEnergy);
+			Deserialize(inData, this->strokes);
+			Deserialize(inData, this->fragmentsMap);
 		}
 	}
 
@@ -168,7 +219,7 @@ namespace PA
 			for (auto j = 0u; j < this->currentApproximation.width; ++j)
 			{
 				auto idx = LebesgueCurve(j, i);
-				auto inColor = this->workingApproximation.data[idx];
+				auto inColor = this->currentApproximation.data[idx];
 				data[i * stride / 4 + j] = ColorU32(inColor, inColor, inColor, 255);
 			}
 		}
@@ -284,10 +335,10 @@ namespace PA
 				}
 
 				auto diff0 = TF(grayscaleReference.data[i]) - TF(img.data[i]);
-				energy += 0.1 * (diff0 * diff0) / imgSize;
+				energy += TF(0.1) * (diff0 * diff0) / imgSize;
 
 				auto diff1 = TF(grayscaleReferenceEdges.data[i]) - TF(img.data[i]);
-				energy += 0.9 * (diff1 * diff1) / imgSize;
+				energy += TF(0.9) * (diff1 * diff1) / imgSize;
 			}
 			return energy;
 		};
