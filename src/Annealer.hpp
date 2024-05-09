@@ -287,17 +287,19 @@ namespace PA
 		Array<Fragment> newFragments;
 		RasterizeToFragments(newCurve, newFragments, workingApproximationHDR.width, workingApproximationHDR.height, newColor);
 		
+		auto localEnergy = GetLocalEnergy(workingApproximation, oldFragments, newFragments);
+
 		RemoveFragmentsFromHDRSurface(oldFragments, workingApproximationHDR);
 		CopyHDRSurfaceToGSSurface(workingApproximationHDR, workingApproximation, oldFragments);
-		auto removeEnergy = GetEnergy(workingApproximation);
+		auto removeEnergy = GetLocalEnergy(workingApproximation, oldFragments, newFragments);
 
 		PutFragmentsOnHDRSurface(newFragments, workingApproximationHDR);
 		CopyHDRSurfaceToGSSurface(workingApproximationHDR, workingApproximation, newFragments);
-		auto updateEnergy = GetEnergy(workingApproximation);
+		auto updateEnergy = GetLocalEnergy(workingApproximation, oldFragments, newFragments);
 
 		PutFragmentsOnHDRSurface(oldFragments, workingApproximationHDR);
 		CopyHDRSurfaceToGSSurface(workingApproximationHDR, workingApproximation, oldFragments);
-		auto addEnergy = GetEnergy(workingApproximation);
+		auto addEnergy = GetLocalEnergy(workingApproximation, oldFragments, newFragments);
 
 		enum class OpType { Remove, Update, Add } opType = OpType::Remove;
 
@@ -317,9 +319,9 @@ namespace PA
 
 		auto transitionThreshold = Exp((optimalEnergy - currentEnergy) / temperature);
 
-		if (currentEnergy < optimalEnergy || transitionThreshold >= GetUniformFloat<TF>())
+		if (currentEnergy < localEnergy || transitionThreshold >= GetUniformFloat<TF>())
 		{
-			optimalEnergy = currentEnergy;
+			//optimalEnergy = currentEnergy;
 
 			if (opType == OpType::Remove)
 			{
@@ -354,7 +356,7 @@ namespace PA
 
 		if (!(step % logAfterSteps))
 		{
-			Log("Energy = ", optimalEnergy, " Temperature = ", temperature);
+			Log("Local Energy = ", localEnergy, " Temperature = ", temperature);
 		}
         step++;
         return true;
@@ -412,6 +414,38 @@ namespace PA
 		{
 			energy += result.Retrieve();
 		}
+
+		return energy;
+	}
+	template<typename TF>
+	inline auto Annealer<TF>::GetLocalEnergy(const RawCPUImage& img, const Array<Fragment>& f0, const Array<Fragment>& f1) -> TF
+	{
+		Set<U32> visitedFragments;
+		TF energy = 0;
+		auto imgSize = img.width * img.height;
+
+		auto collectEnergy =
+		[&](const Array<Fragment>& fragments) -> V
+		{
+			for (auto& frag : fragments)
+			{
+				auto i = frag.idx;
+				if (visitedFragments.contains(i))
+				{
+					continue;
+				}
+				auto diff0 = TF(grayscaleReference.data[i]) - TF(img.data[i]);
+				energy += TF(0.1) * (diff0 * diff0) / imgSize;
+
+				auto diff1 = TF(grayscaleReferenceEdges.data[i]) - TF(img.data[i]);
+				energy += TF(0.9) * (diff1 * diff1) / imgSize;
+
+				visitedFragments.emplace(i);
+			}
+		};
+
+		collectEnergy(f0);
+		collectEnergy(f1);
 
 		return energy;
 	}
