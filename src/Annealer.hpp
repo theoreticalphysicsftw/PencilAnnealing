@@ -255,6 +255,7 @@ namespace PA
 			return false;
 		}
 
+
 		temperature = temperature * TF(0.999);
 
 		auto strokeIdx = GetUniformU32(0, strokes.size() - 1);
@@ -317,19 +318,27 @@ namespace PA
 			opType = OpType::Add;
 		}
 
-		auto transitionThreshold = Exp((localEnergy - currentEnergy) / temperature);
+		auto energyImprovement = localEnergy - currentEnergy;
+		auto transitionThreshold = Exp((energyImprovement) / temperature);
+		auto minPixelImprovement = TF(5) / (workingApproximation.width * workingApproximation.height);
 
-		if (currentEnergy <= localEnergy || transitionThreshold >= GetUniformFloat<TF>())
+		// Never add new curves for no reason.
+		if (energyImprovement < minPixelImprovement && opType == OpType::Add)
+		{
+			transitionThreshold = 0;
+		}
+
+		if (currentEnergy < localEnergy || transitionThreshold > GetUniformFloat<TF>())
 		{
 			//optimalEnergy = currentEnergy;
 
 			if (opType == OpType::Remove)
 			{
-				RemoveCurve(strokeIdx);
 				RemoveFragmentsFromHDRSurface(newFragments, workingApproximationHDR);
 				CopyHDRSurfaceToGSSurface(workingApproximationHDR, workingApproximation, newFragments);
 				RemoveFragmentsFromHDRSurface(oldFragments, workingApproximationHDR);
 				CopyHDRSurfaceToGSSurface(workingApproximationHDR, workingApproximation, oldFragments);
+				RemoveCurve(strokeIdx);
 			}
 			else if (opType == OpType::Add)
 			{
@@ -354,7 +363,7 @@ namespace PA
 			currentApproximationLock.unlock();
 		}
 
-		auto energyImprovement = localEnergy - currentEnergy;
+
 		optimalEnergy -= energyImprovement;
 
 		if (!(step % logAfterSteps))
