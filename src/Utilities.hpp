@@ -57,6 +57,8 @@ namespace PA
 	template <typename T>
 	inline auto Min(const T& v0, const T& v1) -> T;
 
+	template <typename T>
+	inline auto Swap(T& v0, T& v1) -> V;
 
 	inline auto RoundToPowerOfTwo(U32 x) -> U32;
 	inline auto InterleaveBits(U16 n) -> U32;
@@ -131,6 +133,13 @@ namespace PA
 	inline auto Min(const T& v0, const T& v1) -> T
 	{
 		return std::min(v0, v1);
+	}
+
+
+	template<typename T>
+	auto Swap(T& v0, T& v1) -> V
+	{
+		std::swap(v0, v1);
 	}
 
 

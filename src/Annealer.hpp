@@ -56,8 +56,13 @@ namespace PA
 
 		auto GetEnergy(const RawCPUImage& img0) -> TF;
 
+		auto GetLocalEnergy(const RawCPUImage& img0, const Array<Fragment>& f0, const Array<Fragment>& f1) -> TF;
+
 		auto InitBezier() -> V;
 		auto FindEdgeSupport() -> V;
+
+		auto RemoveCurve(U32 curveIdx) -> V;
+		auto AddCurve(QuadraticBezier&& newCurve, Array<Fragment>&& newFragments) -> V;
 
 		auto SaveProgress() -> V;
 		auto LoadProgress() -> V;
@@ -122,8 +127,6 @@ namespace PA
 		this->maxTemperature = 255 * 255;
 		temperature = maxTemperature;
 
-		optimalEnergy = GetEnergy(currentApproximation);
-
 		if (FileExists(CSaveFile))
 		{
 			LoadProgress();
@@ -137,6 +140,7 @@ namespace PA
 		PutFragmentsOnHDRSurface(fragmentsMap, workingApproximationHDR);
 		CopyHDRSurfaceToGSSurface(workingApproximationHDR, workingApproximation);
 		currentApproximation = workingApproximation;
+		optimalEnergy = GetEnergy(currentApproximation);
 	}
 
 	template<typename TF>
@@ -169,6 +173,22 @@ namespace PA
 				}
 			}
 		}
+	}
+
+	template<typename TF>
+	inline auto Annealer<TF>::RemoveCurve(U32 curveIdx) -> V
+	{
+		Swap(strokes[curveIdx], strokes.back());
+		strokes.pop_back();
+		Swap(fragmentsMap[curveIdx], fragmentsMap.back());
+		fragmentsMap.pop_back();
+	}
+
+	template<typename TF>
+	inline auto Annealer<TF>::AddCurve(QuadraticBezier&& newCurve, Array<Fragment>&& newFragments) -> V
+	{
+		strokes.emplace_back(newCurve);
+		fragmentsMap.emplace_back(newFragments);
 	}
 
 	template<typename TF>
@@ -268,25 +288,60 @@ namespace PA
 		RasterizeToFragments(newCurve, newFragments, workingApproximationHDR.width, workingApproximationHDR.height, newColor);
 		
 		RemoveFragmentsFromHDRSurface(oldFragments, workingApproximationHDR);
-		PutFragmentsOnHDRSurface(newFragments, workingApproximationHDR);
-		// Update the surface on both the old and new fragments;
 		CopyHDRSurfaceToGSSurface(workingApproximationHDR, workingApproximation, oldFragments);
+		auto removeEnergy = GetEnergy(workingApproximation);
+
+		PutFragmentsOnHDRSurface(newFragments, workingApproximationHDR);
 		CopyHDRSurfaceToGSSurface(workingApproximationHDR, workingApproximation, newFragments);
-		auto currentEnergy = GetEnergy(workingApproximation);
+		auto updateEnergy = GetEnergy(workingApproximation);
+
+		PutFragmentsOnHDRSurface(oldFragments, workingApproximationHDR);
+		CopyHDRSurfaceToGSSurface(workingApproximationHDR, workingApproximation, oldFragments);
+		auto addEnergy = GetEnergy(workingApproximation);
+
+		enum class OpType { Remove, Update, Add } opType = OpType::Remove;
+
+		auto currentEnergy = removeEnergy;
+
+		if (updateEnergy < currentEnergy)
+		{
+			currentEnergy = updateEnergy;
+			opType = OpType::Update;
+		}
+
+		if (addEnergy < currentEnergy)
+		{
+			currentEnergy = addEnergy;
+			opType = OpType::Add;
+		}
 
 		auto transitionThreshold = Exp((optimalEnergy - currentEnergy) / temperature);
 
 		if (currentEnergy < optimalEnergy || transitionThreshold >= GetUniformFloat<TF>())
 		{
 			optimalEnergy = currentEnergy;
-			oldFragments = newFragments;
-			oldCurve = newCurve;
+
+			if (opType == OpType::Remove)
+			{
+				RemoveCurve(strokeIdx);
+				RemoveFragmentsFromHDRSurface(newFragments, workingApproximationHDR);
+				CopyHDRSurfaceToGSSurface(workingApproximationHDR, workingApproximation, newFragments);
+				RemoveFragmentsFromHDRSurface(oldFragments, workingApproximationHDR);
+				CopyHDRSurfaceToGSSurface(workingApproximationHDR, workingApproximation, oldFragments);
+			}
+			else if (opType == OpType::Add)
+			{
+				AddCurve(Move(newCurve), Move(newFragments));
+			}
+			else
+			{
+				RemoveFragmentsFromHDRSurface(oldFragments, workingApproximationHDR);
+				CopyHDRSurfaceToGSSurface(workingApproximationHDR, workingApproximation, oldFragments);
+			}
 		}
 		else
 		{
 			RemoveFragmentsFromHDRSurface(newFragments, workingApproximationHDR);
-			PutFragmentsOnHDRSurface(oldFragments, workingApproximationHDR);
-			CopyHDRSurfaceToGSSurface(workingApproximationHDR, workingApproximation, oldFragments);
 			CopyHDRSurfaceToGSSurface(workingApproximationHDR, workingApproximation, newFragments);
 		}
 
