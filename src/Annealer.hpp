@@ -63,6 +63,7 @@ namespace PA
 
 		auto RemoveCurve(U32 curveIdx) -> V;
 		auto AddCurve(QuadraticBezier&& newCurve, Array<Fragment>&& newFragments) -> V;
+		auto PruneCurves() -> V;
 
 		auto SaveProgress() -> V;
 		auto LoadProgress() -> V;
@@ -134,9 +135,10 @@ namespace PA
 		else
 		{
 			InitBezier();
+			fragmentsMap.resize(strokes.size());
+			RasterizeToFragments(Span<const QuadraticBezier>(strokes), fragmentsMap, grayscaleReference.width, grayscaleReference.height, threadPool);
 		}
-		fragmentsMap.resize(strokes.size());
-		RasterizeToFragments(Span<const QuadraticBezier>(strokes), fragmentsMap, grayscaleReference.width, grayscaleReference.height, threadPool);
+
 		PutFragmentsOnHDRSurface(fragmentsMap, workingApproximationHDR);
 		CopyHDRSurfaceToGSSurface(workingApproximationHDR, workingApproximation);
 		currentApproximation = workingApproximation;
@@ -146,6 +148,7 @@ namespace PA
 	template<typename TF>
 	inline Annealer<TF>::~Annealer()
 	{
+		PruneCurves();
 		SaveProgress();
 		SerializeToSVG(Span<const QuadraticBezier>(strokes), grayscaleReference.width, grayscaleReference.height);
 	}
@@ -189,6 +192,33 @@ namespace PA
 	{
 		strokes.emplace_back(newCurve);
 		fragmentsMap.emplace_back(newFragments);
+	}
+
+	template<typename TF>
+	inline auto Annealer<TF>::PruneCurves() -> V
+	{
+		for (auto i = 0; i < strokes.size(); ++i)
+		{
+			auto& oldCurve = strokes[i];
+			auto& oldFragments = fragmentsMap[i];
+
+			auto localEnergy = GetLocalEnergy(workingApproximation, oldFragments, Array<Fragment>());
+
+			RemoveFragmentsFromHDRSurface(oldFragments, workingApproximationHDR);
+			CopyHDRSurfaceToGSSurface(workingApproximationHDR, workingApproximation, oldFragments);
+			auto removeEnergy = GetLocalEnergy(workingApproximation, oldFragments, Array<Fragment>());
+
+			if (removeEnergy <= localEnergy)
+			{
+				RemoveCurve(i);
+				i--;
+			}
+			else
+			{
+				PutFragmentsOnHDRSurface(oldFragments, workingApproximationHDR);
+				CopyHDRSurfaceToGSSurface(workingApproximationHDR, workingApproximation, oldFragments);
+			}
+		}
 	}
 
 	template<typename TF>
@@ -373,7 +403,18 @@ namespace PA
 
 		if (!(step % logAfterSteps))
 		{
-			Log("Energy = ", optimalEnergy, " Temperature = ", temperature, " Progress = ", progress, "%");
+			Log
+			(
+				"Energy = ",
+				optimalEnergy,
+				" Temperature = ",
+				temperature,
+				" StrokesCount = ",
+				strokes.size(),
+				" Progress = ",
+				progress,
+				"%"
+			);
 		}
 
         return true;
@@ -409,10 +450,10 @@ namespace PA
 				}
 
 				auto diff0 = TF(grayscaleReference.data[i]) - TF(img.data[i]);
-				energy += TF(0.1) * (diff0 * diff0) / imgSize;
+				energy += TF(0.2) * (diff0 * diff0) / imgSize;
 
 				auto diff1 = TF(grayscaleReferenceEdges.data[i]) - TF(img.data[i]);
-				energy += TF(0.9) * (diff1 * diff1) / imgSize;
+				energy += TF(0.8) * (diff1 * diff1) / imgSize;
 			}
 			return energy;
 		};
@@ -452,10 +493,10 @@ namespace PA
 					continue;
 				}
 				auto diff0 = TF(grayscaleReference.data[i]) - TF(img.data[i]);
-				energy += TF(0.1) * (diff0 * diff0) / imgSize;
+				energy += TF(0.2) * (diff0 * diff0) / imgSize;
 
 				auto diff1 = TF(grayscaleReferenceEdges.data[i]) - TF(img.data[i]);
-				energy += TF(0.9) * (diff1 * diff1) / imgSize;
+				energy += TF(0.8) * (diff1 * diff1) / imgSize;
 
 				visitedFragments.emplace(i);
 			}
