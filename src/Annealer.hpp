@@ -331,7 +331,7 @@ namespace PA
 		if (currentEnergy < localEnergy || transitionThreshold > GetUniformFloat<TF>())
 		{
 			//optimalEnergy = currentEnergy;
-
+			optimalEnergy -= energyImprovement;
 			if (opType == OpType::Remove)
 			{
 				RemoveFragmentsFromHDRSurface(newFragments, workingApproximationHDR);
@@ -348,6 +348,8 @@ namespace PA
 			{
 				RemoveFragmentsFromHDRSurface(oldFragments, workingApproximationHDR);
 				CopyHDRSurfaceToGSSurface(workingApproximationHDR, workingApproximation, oldFragments);
+				oldFragments = newFragments;
+				oldCurve = newCurve;
 			}
 		}
 		else
@@ -364,13 +366,16 @@ namespace PA
 		}
 
 
-		optimalEnergy -= energyImprovement;
+		
+
+		step++;
+		auto progress = TF(step) / maxSteps * TF(100);
 
 		if (!(step % logAfterSteps))
 		{
-			Log("Energy = ", optimalEnergy, " Temperature = ", temperature);
+			Log("Energy = ", optimalEnergy, " Temperature = ", temperature, " Progress = ", progress, "%");
 		}
-        step++;
+
         return true;
 	}
 
