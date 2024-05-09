@@ -57,7 +57,7 @@ namespace PA
 	inline static constexpr auto SobelY = Kernel<TF, Channels, 3, 3, true>(TF(1), TF(2), TF(1), TF(0), TF(0), TF(0), TF(-1), TF(-2), TF(-1));
 
 	inline auto SobelEdgeDetect(ThreadPool<>& threadPool, const RawCPUImage& input, F32 threshold = 200) -> RawCPUImage;
-	inline auto GradientMagnitude(ThreadPool<>& threadPool, const RawCPUImage& input) -> RawCPUImage;
+	inline auto GradientMagnitude(ThreadPool<>& threadPool, const RawCPUImage& input, F32 threshold = 150) -> RawCPUImage;
 }
 
 
@@ -177,7 +177,7 @@ namespace PA
 		return result;
 	}
 
-	inline auto GradientMagnitude(ThreadPool<>& threadPool, const RawCPUImage& input) -> RawCPUImage
+	inline auto GradientMagnitude(ThreadPool<>& threadPool, const RawCPUImage& input, F32 threshold) -> RawCPUImage
 	{
 		PA_ASSERT(input.lebesgueOrdered);
 		RawCPUImage result(input.width, input.height, input.format, true);
@@ -204,7 +204,7 @@ namespace PA
 				auto gYV = ((F32*)gY.data.data())[i];
 				//result.data[i] = ClampedU8(Sqrt(gXV * gXV + gYV * gYV));
 				auto gradMag = Sqrt(gXV * gXV + gYV * gYV);
-				result.data[i] = (gradMag < 150) ? gradMag : 255;
+				result.data[i] = (gradMag < threshold) ? gradMag : 255;
 			}
 		};
 
