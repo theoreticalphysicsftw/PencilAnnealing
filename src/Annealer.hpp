@@ -317,9 +317,9 @@ namespace PA
 			opType = OpType::Add;
 		}
 
-		auto transitionThreshold = Exp((optimalEnergy - currentEnergy) / temperature);
+		auto transitionThreshold = Exp((localEnergy - currentEnergy) / temperature);
 
-		if (currentEnergy < localEnergy || transitionThreshold >= GetUniformFloat<TF>())
+		if (currentEnergy <= localEnergy || transitionThreshold >= GetUniformFloat<TF>())
 		{
 			//optimalEnergy = currentEnergy;
 
@@ -354,9 +354,12 @@ namespace PA
 			currentApproximationLock.unlock();
 		}
 
+		auto energyImprovement = localEnergy - currentEnergy;
+		optimalEnergy -= energyImprovement;
+
 		if (!(step % logAfterSteps))
 		{
-			Log("Local Energy = ", localEnergy, " Temperature = ", temperature);
+			Log("Energy = ", optimalEnergy, " Temperature = ", temperature);
 		}
         step++;
         return true;
