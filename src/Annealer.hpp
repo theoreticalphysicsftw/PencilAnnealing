@@ -62,7 +62,7 @@ namespace PA
 		auto FindEdgeSupport() -> V;
 
 		auto RemoveCurve(U32 curveIdx) -> V;
-		auto AddCurve(QuadraticBezier&& newCurve, Array<Fragment>&& newFragments) -> V;
+		auto AddCurve(QuadraticBezier&& newCurve, Array<Fragment>&& newFragments, Scalar width, Scalar pigment) -> V;
 		auto PruneCurves() -> V;
 
 		auto SaveProgress() -> V;
@@ -76,16 +76,20 @@ namespace PA
 		RawCPUImage workingApproximationHDR;
 
 		Array<QuadraticBezier> strokes;
+		Array<Scalar> widths;
+		Array<Scalar> pigments;
 		Array<Array<Fragment>> fragmentsMap;
 
 		Array<U32> edgeSupport;
 
 		U32 maxStrokes;
 		U32 maxSteps;
+		Scalar maxWidth;
 
 		Scalar temperature;
 		Scalar maxTemperature;
 		Scalar optimalEnergy;
+
 		U32 step = 0;
 
 		Mutex currentApproximationLock;
@@ -123,6 +127,7 @@ namespace PA
 
 		FindEdgeSupport();
 
+		this->maxWidth = 10;
 		this->maxStrokes = maxStrokes ? maxStrokes : (reference->width * reference->height / 256);
 		this->maxSteps = maxSteps ? maxSteps : (1u << 25);
 		this->maxTemperature = 255 * 255;
@@ -136,7 +141,16 @@ namespace PA
 		{
 			InitBezier();
 			fragmentsMap.resize(strokes.size());
-			RasterizeToFragments(Span<const QuadraticBezier>(strokes), fragmentsMap, grayscaleReference.width, grayscaleReference.height, threadPool);
+			RasterizeToFragments
+			(
+				Span<const QuadraticBezier>(strokes),
+				Span<const TF>(widths),
+				Span<const TF>(pigments),
+				fragmentsMap,
+				grayscaleReference.width,
+				grayscaleReference.height,
+				threadPool
+			);
 		}
 
 		PutFragmentsOnHDRSurface(fragmentsMap, workingApproximationHDR);
@@ -159,6 +173,8 @@ namespace PA
 		for (auto i = 0u; i < maxStrokes; ++i)
 		{
 			strokes.push_back(GetRandom2DQuadraticBezierInRange(TF(1)));
+			widths.push_back(GetUniformFloat(TF(1), TF(maxWidth)));
+			pigments.push_back(GetUniformFloat(TF(0), TF(1)));
 		}
 	}
 
@@ -183,14 +199,20 @@ namespace PA
 	{
 		Swap(strokes[curveIdx], strokes.back());
 		strokes.pop_back();
+		Swap(widths[curveIdx], widths.back());
+		widths.pop_back();
+		Swap(pigments[curveIdx], pigments.back());
+		pigments.pop_back();
 		Swap(fragmentsMap[curveIdx], fragmentsMap.back());
 		fragmentsMap.pop_back();
 	}
 
 	template<typename TF>
-	inline auto Annealer<TF>::AddCurve(QuadraticBezier&& newCurve, Array<Fragment>&& newFragments) -> V
+	inline auto Annealer<TF>::AddCurve(QuadraticBezier&& newCurve, Array<Fragment>&& newFragments, TF width, TF pigment) -> V
 	{
 		strokes.emplace_back(newCurve);
+		widths.emplace_back(width);
+		pigments.emplace_back(pigment);
 		fragmentsMap.emplace_back(newFragments);
 	}
 
@@ -235,6 +257,8 @@ namespace PA
 			Serialize(outBuffer, this->temperature);
 			Serialize(outBuffer, this->optimalEnergy);
 			Serialize(outBuffer, this->strokes);
+			Serialize(outBuffer, this->widths);
+			Serialize(outBuffer, this->pigments);
 			Serialize(outBuffer, this->fragmentsMap);
 		}
 		WriteWholeFile(CSaveFile, outBuffer);
@@ -255,6 +279,8 @@ namespace PA
 			Deserialize(inData, this->temperature);
 			Deserialize(inData, this->optimalEnergy);
 			Deserialize(inData, this->strokes);
+			Deserialize(inData, this->widths);
+			Deserialize(inData, this->pigments);
 			Deserialize(inData, this->fragmentsMap);
 		}
 	}
@@ -292,13 +318,10 @@ namespace PA
 
 		auto& oldCurve = strokes[strokeIdx];
 		auto& oldFragments = fragmentsMap[strokeIdx];
+		auto& oldWidth = widths[strokeIdx];
+		auto& oldPigment = pigments[strokeIdx];
 
 		auto s0 = GetUniformU32(0, edgeSupport.size() - 1);
-		//auto s1 = GetUniformU32(0, edgeSupport.size() - 1);
-		//auto s2 = GetUniformU32(0, edgeSupport.size() - 1);
-		//auto p0 = LebesgueCurveInverse(edgeSupport[s0]);
-		//auto p1 = LebesgueCurveInverse(edgeSupport[s1]);
-		//auto p2 = LebesgueCurveInverse(edgeSupport[s2]);
 
 		auto maxLength = grayscaleReference.width * TF(0.1);
 		auto length = GetUniformFloat(TF(3), maxLength);
@@ -310,13 +333,20 @@ namespace PA
 		auto p2 = p1 + length * Vec(Cos(a2), Sin(a2));
 		auto newCurve = GetBezierPassingThrough(p0, p1, p2);
 
-		//auto newCurve = GetBezierPassingThrough(Vec(p0.first, p0.second), Vec(p1.first, p1.second), Vec(p2.first, p2.second));
 		grayscaleReference.ToNormalizedCoordinates(Span<Vec>(newCurve.points));
-		auto newColor = GetUniformFloat(TF(0), TF(1));
-		//auto newCurve = GetRandom2DQuadraticBezierInRange(TF(1));
+		auto newPigment = GetUniformFloat(TF(0), TF(1));
+		auto newWidth = GetUniformFloat(TF(1), TF(maxWidth));
 
 		Array<Fragment> newFragments;
-		RasterizeToFragments(newCurve, newFragments, workingApproximationHDR.width, workingApproximationHDR.height, newColor);
+		RasterizeToFragments
+		(
+			newCurve,
+			newFragments,
+			workingApproximationHDR.width,
+			workingApproximationHDR.height,
+			newPigment,
+			newWidth
+		);
 		
 		auto localEnergy = GetLocalEnergy(workingApproximation, oldFragments, newFragments);
 
@@ -360,7 +390,6 @@ namespace PA
 
 		if (currentEnergy < localEnergy || transitionThreshold > GetUniformFloat<TF>())
 		{
-			//optimalEnergy = currentEnergy;
 			optimalEnergy -= energyImprovement;
 			if (opType == OpType::Remove)
 			{
@@ -372,7 +401,7 @@ namespace PA
 			}
 			else if (opType == OpType::Add)
 			{
-				AddCurve(Move(newCurve), Move(newFragments));
+				AddCurve(Move(newCurve), Move(newFragments), newPigment, newWidth);
 			}
 			else
 			{
@@ -380,6 +409,8 @@ namespace PA
 				CopyHDRSurfaceToGSSurface(workingApproximationHDR, workingApproximation, oldFragments);
 				oldFragments = newFragments;
 				oldCurve = newCurve;
+				oldWidth = newWidth;
+				oldPigment = newPigment;
 			}
 		}
 		else

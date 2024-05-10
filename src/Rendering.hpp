@@ -49,12 +49,22 @@ namespace PA
 	};
 
 	template <typename TF>
-	inline auto RasterizeToFragments(const QuadraticBezier<TF, 2>& curve, Array<Fragment>& fragments, U32 width, U32 height, TF color = TF(1)) -> V;
+	inline auto RasterizeToFragments
+	(
+		const QuadraticBezier<TF, 2>& curve,
+		Array<Fragment>& fragments,
+		U32 width,
+		U32 height,
+		TF color = TF(1),
+		TF curveWidth = TF(1)
+	) -> V;
 
 	template<typename TF>
 	inline auto RasterizeToFragments
 	(
 		Span<const QuadraticBezier<TF, 2>> curves,
+		Span<const TF> widths,
+		Span<const TF> pigments,
 		Array<Array<Fragment>>& fragMap,
 		U32 width,
 		U32 height,
@@ -196,9 +206,10 @@ namespace PA
 
 
 	template<typename TF>
-	auto RasterizeToFragments(const QuadraticBezier<TF, 2>& curve, Array<Fragment>& fragments, U32 width, U32 height, TF color) -> V
+	auto RasterizeToFragments(const QuadraticBezier<TF, 2>& curve, Array<Fragment>& fragments, U32 width, U32 height, TF color, TF curveWidth) -> V
 	{
-		static constexpr TF splitCutoff = 8;
+		const auto halfCurveWidth = curveWidth / TF(2);
+		TF splitCutoff = 8 + 2 * curveWidth;
 		static constexpr TF valThreshold = TF(0.0001);
 		fragments.clear();
 		auto screenCurve = curve;
@@ -218,10 +229,10 @@ namespace PA
 			if (roughApproxLength <= splitCutoff)
 			{
 				auto bBox = current.GetBBox();
-				auto xMin = Min(U32(Max(TF(0), Floor(bBox.lower[0]))), width);
-				auto xMax = Min(U32(Max(TF(0), Ceil(bBox.upper[0]))), width);
-				auto yMin = Min(U32(Max(TF(0), Floor(bBox.lower[1]))), height);
-				auto yMax = Min(U32(Max(TF(0), Ceil(bBox.upper[1]))), height);
+				auto xMin = Min(U32(Max(TF(0), Floor(bBox.lower[0]) - halfCurveWidth)), width);
+				auto xMax = Min(U32(Max(TF(0), Ceil(bBox.upper[0] + halfCurveWidth))), width);
+				auto yMin = Min(U32(Max(TF(0), Floor(bBox.lower[1] - halfCurveWidth))), height);
+				auto yMax = Min(U32(Max(TF(0), Ceil(bBox.upper[1]) + halfCurveWidth)), height);
 				for (auto i = yMin ; i <= yMax; ++i)
 				{
 					for (auto j = xMin ; j <= xMax; ++j)
@@ -233,8 +244,8 @@ namespace PA
 
 						auto idx = LebesgueCurve(j, i);
 						auto pixelCenter = Vector<TF, 2>(j, i) + TF(0.5);
-						auto dist = current.GetDistanceFrom(pixelCenter);
-						auto val = color * Max(TF(0), TF(1) - SmoothStep(TF(0), TF(1), dist));
+						auto dist = current.GetDistanceFrom(pixelCenter) - halfCurveWidth;
+						auto val = color * Max(TF(0), TF(1) - SmoothStep(TF(0), TF(1.25), dist));
 						if (val > valThreshold)
 						{
 							fragments.emplace_back(idx, val);
@@ -256,6 +267,8 @@ namespace PA
 	auto RasterizeToFragments
 	(
 		Span<const QuadraticBezier<TF, 2>> curves,
+		Span<const TF> widths,
+		Span<const TF> pigments,
 		Array<Array<Fragment>>& fragMap,
 		U32 width,
 		U32 height,
@@ -270,7 +283,7 @@ namespace PA
 			{
 				for (auto i = start; i < end; ++i)
 				{
-					RasterizeToFragments(curves[i], fragMap[i], width, height);
+					RasterizeToFragments(curves[i], fragMap[i], width, height, widths[i], pigments[i]);
 				}
 			};
 
