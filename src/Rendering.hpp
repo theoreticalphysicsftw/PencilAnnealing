@@ -209,7 +209,7 @@ namespace PA
 	auto RasterizeToFragments(const QuadraticBezier<TF, 2>& curve, Array<Fragment>& fragments, U32 width, U32 height, TF color, TF curveWidth) -> V
 	{
 		const auto halfCurveWidth = curveWidth / TF(2);
-		TF splitCutoff = 8 + 2 * curveWidth;
+		TF splitCutoff = 4 + 2 * curveWidth;
 		static constexpr TF valThreshold = TF(0.0001);
 		fragments.clear();
 		auto screenCurve = curve;
@@ -218,7 +218,7 @@ namespace PA
 		StaticArray<QuadraticBezier<TF, 2>, 64> stack;
 		auto stackSize = 0u;
 		stack[stackSize++] = screenCurve;
-		Set<U32> visitedIndices;
+		Map<U32, F32> rasterizedFragments;
 
 		while (stackSize)
 		{
@@ -230,7 +230,7 @@ namespace PA
 			if (roughApproxLength <= splitCutoff)
 			{
 				auto bBox = current.GetBBox();
-				auto xMin = Min(U32(Max(TF(0), Floor(bBox.lower[0]) - halfCurveWidth)), width);
+				auto xMin = Min(U32(Max(TF(0), Floor(bBox.lower[0] - halfCurveWidth))), width);
 				auto xMax = Min(U32(Max(TF(0), Ceil(bBox.upper[0] + halfCurveWidth))), width);
 				auto yMin = Min(U32(Max(TF(0), Floor(bBox.lower[1] - halfCurveWidth))), height);
 				auto yMax = Min(U32(Max(TF(0), Ceil(bBox.upper[1]) + halfCurveWidth)), height);
@@ -246,11 +246,18 @@ namespace PA
 						auto idx = LebesgueCurve(j, i);
 						auto pixelCenter = Vector<TF, 2>(j, i) + TF(0.5);
 						auto dist = current.GetDistanceFrom(pixelCenter) - halfCurveWidth;
-						auto val = color * Max(TF(0), TF(1) - SmoothStep(TF(0), TF(1.25), dist));
-						if (val > valThreshold && !visitedIndices.contains(idx))
+						auto val = color * Max(TF(0), TF(1) - SmoothStep(TF(0), TF(1.5), dist));
+						if (val > valThreshold)
 						{
-							fragments.emplace_back(idx, val);
-							visitedIndices.insert(idx);
+							auto oldVal = rasterizedFragments.find(idx);
+							if (oldVal != rasterizedFragments.end())
+							{
+								oldVal->second = Max(oldVal->second, val);
+							}
+							else
+							{
+								rasterizedFragments[idx] = val;
+							}
 						}
 					}
 				}
@@ -258,9 +265,15 @@ namespace PA
 			else
 			{
 				auto split = current.Split(TF(0.5));
-				stack[stackSize++] = split.first;
 				stack[stackSize++] = split.second;
+				stack[stackSize++] = split.first;
 			}
+		}
+
+		fragments.reserve(rasterizedFragments.size());
+		for (auto& frag : rasterizedFragments)
+		{
+			fragments.emplace_back(frag.first, frag.second);
 		}
 	}
 
