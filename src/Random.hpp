@@ -32,8 +32,11 @@ namespace PA
 	template <typename TF>
 	auto GetUniformFloat(TF range0 = TF(0), TF range1 = TF(1)) -> TF;
 
-	auto GetUniformU32(U32 range0, U32 range1) -> U32;
-	auto GetUniformBernoulli() -> B;
+	template <typename TF>
+	inline auto GetExponentialFloat(TF lambda = TF(1)) -> TF;
+
+	inline auto GetUniformU32(U32 range0, U32 range1) -> U32;
+	inline auto GetUniformBernoulli() -> B;
 }
 
 
@@ -43,6 +46,14 @@ namespace PA
 	auto GetUniformFloat(TF range0, TF range1) -> TF
 	{
 		std::uniform_real_distribution<TF> dist(range0, range1);
+		return dist(GMerseneTwister);
+	}
+
+	template<typename TF>
+	auto GetExponentialFloat(TF lambda) -> TF
+	{
+		std::exponential_distribution<TF> dist(lambda);
+
 		return dist(GMerseneTwister);
 	}
 
