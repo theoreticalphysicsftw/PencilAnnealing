@@ -218,6 +218,7 @@ namespace PA
 		StaticArray<QuadraticBezier<TF, 2>, 64> stack;
 		auto stackSize = 0u;
 		stack[stackSize++] = screenCurve;
+		Set<U32> visitedIndices;
 
 		while (stackSize)
 		{
@@ -246,9 +247,10 @@ namespace PA
 						auto pixelCenter = Vector<TF, 2>(j, i) + TF(0.5);
 						auto dist = current.GetDistanceFrom(pixelCenter) - halfCurveWidth;
 						auto val = color * Max(TF(0), TF(1) - SmoothStep(TF(0), TF(1.25), dist));
-						if (val > valThreshold)
+						if (val > valThreshold && !visitedIndices.contains(idx))
 						{
 							fragments.emplace_back(idx, val);
+							visitedIndices.insert(idx);
 						}
 					}
 				}
