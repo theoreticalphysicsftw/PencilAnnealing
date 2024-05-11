@@ -83,6 +83,8 @@ namespace PA
 	inline auto ToSurfaceCoordinates(const Vector<TF, 2>& in, U32 width, U32 height) -> Vector<TF, 2>;
 	template <typename TF>
 	inline auto ToSurfaceCoordinates(Span<Vector<TF, 2>> in, U32 width, U32 height) -> V;
+
+	inline auto AdditiveBlendA8(const RawCPUImage& img0, const RawCPUImage& img1, F32 img0Contribution) -> RawCPUImage;
 }
 
 
@@ -119,6 +121,24 @@ namespace PA
 		};
 
 		return sizeTable[U32(format)];
+	}
+
+	inline auto AdditiveBlendA8(const RawCPUImage& img0, const RawCPUImage& img1, F32 img0Contribution) -> RawCPUImage
+	{
+		PA_ASSERT(img0.width == img0.height && img1.width == img1.height);
+		PA_ASSERT(img0.lebesgueOrdered && img1.lebesgueOrdered);
+		PA_ASSERT(img0.format == EFormat::A8 && img1.format == EFormat::A8);
+
+		RawCPUImage result(img0.width, img0.height, img0.format, img0.lebesgueOrdered);
+
+		auto maxExtent = img0.lebesgueStride * img0.lebesgueStride;
+
+		for (auto i = 0; i < maxExtent; ++i)
+		{
+			result.data[i] = ClampedU8(img0Contribution * img0.data[i] + (1.f - img0Contribution) * img1.data[i]);
+		}
+
+		return result;
 	}
 
 
