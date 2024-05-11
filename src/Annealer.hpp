@@ -69,8 +69,7 @@ namespace PA
 		auto LoadProgress() -> V;
 
 		RawCPUImage grayscaleReference;
-		RawCPUImage grayscaleBlurredReference;
-		RawCPUImage grayscaleReferenceEdges;
+		RawCPUImage grayscaleReferenceFiltered;
 		RawCPUImage currentApproximation;
 		RawCPUImage workingApproximation;
 		RawCPUImage workingApproximationHDR;
@@ -103,6 +102,7 @@ namespace PA
 	template<typename TF>
 	inline Annealer<TF>::Annealer(const RawCPUImage* reference, U32 maxStrokes, U32 maxSteps) :
 		grayscaleReference(reference->width, reference->height, EFormat::A8, true),
+		grayscaleReferenceFiltered(reference->width, reference->height, EFormat::A8, true),
 		currentApproximation(reference->width, reference->height, EFormat::A8, true),
 		workingApproximation(reference->width, reference->height, EFormat::A8, true),
 		workingApproximationHDR(reference->width, reference->height, EFormat::A32Float, true)
@@ -123,7 +123,8 @@ namespace PA
 			}
 		}
 
-		grayscaleReferenceEdges = GradientMagnitude(threadPool, grayscaleReference);
+		auto grayscaleReferenceEdges = GradientMagnitude(threadPool, grayscaleReference);
+		grayscaleReferenceFiltered = AdditiveBlendA8(grayscaleReference, grayscaleReferenceEdges, 0.2f);
 
 		FindEdgeSupport();
 
@@ -181,12 +182,12 @@ namespace PA
 	template<typename TF>
 	inline auto Annealer<TF>::FindEdgeSupport() -> V
 	{
-		for (auto i = 0u; i < grayscaleReferenceEdges.height; ++i)
+		for (auto i = 0u; i < grayscaleReferenceFiltered.height; ++i)
 		{
-			for (auto j = 0u; j < grayscaleReferenceEdges.width; ++j)
+			for (auto j = 0u; j < grayscaleReferenceFiltered.width; ++j)
 			{
 				auto idx = LebesgueCurve(j, i);
-				if (grayscaleReferenceEdges.data[idx] < 255)
+				if (grayscaleReferenceFiltered.data[idx] < 255)
 				{
 					edgeSupport.push_back(idx);
 				}
@@ -311,6 +312,7 @@ namespace PA
 			return false;
 		}
 
+		auto startTime = GetTimeStampUS();
 
 		temperature = temperature * TF(0.999);
 
@@ -323,7 +325,7 @@ namespace PA
 
 		auto s0 = GetUniformU32(0, edgeSupport.size() - 1);
 
-		auto maxLength = grayscaleReference.width * TF(0.1);
+		auto maxLength = grayscaleReference.width * TF(0.2);
 		auto length = GetUniformFloat(TF(3), maxLength);
 		auto p1U = LebesgueCurveInverse(edgeSupport[s0]);
 		auto p1 = Vec(p1U.first, p1U.second);
@@ -335,7 +337,7 @@ namespace PA
 
 		grayscaleReference.ToNormalizedCoordinates(Span<Vec>(newCurve.points));
 		auto newPigment = GetUniformFloat(TF(0), TF(1));
-		auto newWidth = GetUniformFloat(TF(1), TF(maxWidth));
+		auto newWidth = Min(maxWidth, GetExponentialFloat(TF(1) / maxWidth));
 
 		Array<Fragment> newFragments;
 		RasterizeToFragments
@@ -426,26 +428,34 @@ namespace PA
 			currentApproximationLock.unlock();
 		}
 
-
-		
-
 		step++;
 		auto progress = TF(step) / maxSteps * TF(100);
 
+		auto endTime = GetTimeStampUS();
+
+		static auto avgTime = TF(0);
+
+		avgTime += endTime - startTime;
+
 		if (!(step % logAfterSteps))
 		{
+			avgTime /= TF(logAfterSteps);
 			Log
 			(
 				"Energy = ",
 				optimalEnergy,
-				" Temperature = ",
+				"\tTemperature = ",
 				temperature,
-				" StrokesCount = ",
+				"\tStrokesCount = ",
 				strokes.size(),
-				" Progress = ",
+				"\tProgress = ",
 				progress,
-				"%"
+				"%",
+				"\tAvgStepTime = ",
+				avgTime,
+				"us"
 			);
+			avgTime = 0;
 		}
 
         return true;
@@ -480,11 +490,8 @@ namespace PA
 					continue;
 				}
 
-				auto diff0 = TF(grayscaleReference.data[i]) - TF(img.data[i]);
-				energy += TF(0.2) * (diff0 * diff0) / imgSize;
-
-				auto diff1 = TF(grayscaleReferenceEdges.data[i]) - TF(img.data[i]);
-				energy += TF(0.8) * (diff1 * diff1) / imgSize;
+				auto diff = TF(grayscaleReferenceFiltered.data[i]) - TF(img.data[i]);
+				energy += (diff * diff) / imgSize;
 			}
 			return energy;
 		};
@@ -523,11 +530,9 @@ namespace PA
 				{
 					continue;
 				}
-				auto diff0 = TF(grayscaleReference.data[i]) - TF(img.data[i]);
-				energy += TF(0.2) * (diff0 * diff0) / imgSize;
 
-				auto diff1 = TF(grayscaleReferenceEdges.data[i]) - TF(img.data[i]);
-				energy += TF(0.8) * (diff1 * diff1) / imgSize;
+				auto diff = TF(grayscaleReferenceFiltered.data[i]) - TF(img.data[i]);
+				energy += (diff * diff) / imgSize;
 
 				visitedFragments.emplace(i);
 			}
