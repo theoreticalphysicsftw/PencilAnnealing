@@ -209,7 +209,7 @@ namespace PA
 	auto RasterizeToFragments(const QuadraticBezier<TF, 2>& curve, Array<Fragment>& fragments, U32 width, U32 height, TF color, TF curveWidth) -> V
 	{
 		const auto halfCurveWidth = curveWidth / TF(2);
-		TF splitCutoff = 4 + 2 * curveWidth;
+		TF splitCutoff = 4;
 		static constexpr TF valThreshold = TF(0.0001);
 		fragments.clear();
 		auto screenCurve = curve;
