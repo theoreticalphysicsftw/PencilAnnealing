@@ -245,7 +245,16 @@ namespace PA
 
 						auto idx = LebesgueCurve(j, i);
 						auto pixelCenter = Vector<TF, 2>(j, i) + TF(0.5);
-						auto dist = current.GetDistanceFrom(pixelCenter) - halfCurveWidth;
+
+						// Since the curve is very tiny we can approximate the distance by few samples
+						// instead of solving the cubic equation.
+						auto sample0 = current.EvaluateAt(TF(0.5));
+						auto dist0 = Distance(pixelCenter, sample0);
+						auto dist1 = Distance(pixelCenter, current.p0);
+						auto dist2 = Distance(pixelCenter, current.p2);
+
+						// auto dist = current.GetDistanceFrom(pixelCenter) - halfCurveWidth;
+						auto dist = Min(dist0, Min(dist1, dist2)) - halfCurveWidth;
 						auto val = color * Max(TF(0), TF(1) - SmoothStep(TF(0), TF(1.5), dist));
 						if (val > valThreshold)
 						{
