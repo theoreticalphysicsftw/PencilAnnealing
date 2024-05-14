@@ -314,7 +314,7 @@ namespace PA
 
 		auto startTime = GetTimeStampUS();
 
-		temperature = temperature * TF(0.999);
+		temperature = temperature * TF(0.9999);
 
 		auto strokeIdx = GetUniformU32(0, strokes.size() - 1);
 
@@ -337,7 +337,7 @@ namespace PA
 
 		grayscaleReference.ToNormalizedCoordinates(Span<Vec>(newCurve.points));
 		auto newPigment = GetUniformFloat(TF(0), TF(1));
-		auto newWidth = Min(maxWidth, GetExponentialFloat(TF(1) / maxWidth));
+		auto newWidth = Min(maxWidth, GetExponentialFloat((TF(2) / maxWidth)) * temperature + 1);
 
 		Array<Fragment> newFragments;
 		RasterizeToFragments
@@ -513,10 +513,14 @@ namespace PA
 
 		return energy;
 	}
+
+
 	template<typename TF>
 	inline auto Annealer<TF>::GetLocalEnergy(const RawCPUImage& img, const Array<Fragment>& f0, const Array<Fragment>& f1) -> TF
 	{
-		Set<U32> visitedFragments;
+		static DynamicBitset visitedFragments;
+		visitedFragments.Expand(img.lebesgueStride * img.lebesgueStride);
+
 		TF energy = 0;
 		auto imgSize = img.width * img.height;
 
@@ -526,7 +530,7 @@ namespace PA
 			for (auto& frag : fragments)
 			{
 				auto i = frag.idx;
-				if (visitedFragments.contains(i))
+				if (visitedFragments.GetBitUnsafe(i))
 				{
 					continue;
 				}
@@ -534,12 +538,24 @@ namespace PA
 				auto diff = TF(grayscaleReferenceFiltered.data[i]) - TF(img.data[i]);
 				energy += (diff * diff) / imgSize;
 
-				visitedFragments.emplace(i);
+				visitedFragments.SetBitUnsafe(i);
+			}
+		};
+
+		auto clearVisited = 
+		[&](const Array<Fragment>& fragments)
+		{
+			for (auto& frag : fragments)
+			{
+				visitedFragments.ClearBitUnsafe(frag.idx);
 			}
 		};
 
 		collectEnergy(f0);
 		collectEnergy(f1);
+
+		clearVisited(f0);
+		clearVisited(f1);
 
 		return energy;
 	}
