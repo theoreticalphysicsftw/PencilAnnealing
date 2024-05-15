@@ -195,8 +195,7 @@ namespace PA
 	template<typename T>
 	inline auto RawCPUImage::Clear(T clearValue) -> V
 	{
-		auto maxDim = Max(height, width);
-		auto maxExtent = lebesgueOrdered? maxDim * maxDim : width * height;
+		auto maxExtent = lebesgueOrdered? lebesgueStride * lebesgueStride : width * height;
 		auto tPtr = (T*)data.data();
 
 		for (auto i = 0u; i < maxExtent; ++i)
@@ -208,8 +207,7 @@ namespace PA
 	template<typename T>
 	inline auto RawCPUImage::Clear(T clearValue, ThreadPool<>& threadPool) -> V
 	{
-		auto maxDim = Max(height, width);
-		auto maxExtent = lebesgueOrdered ? maxDim * maxDim : width * height;
+		auto maxExtent = lebesgueOrdered ? lebesgueStride * lebesgueStride : width * height;
 		auto tPtr = (T*)data.data();
 		auto taskCount = GetLogicalCPUCount();
 		auto pixelsPerTask = maxExtent / taskCount;
