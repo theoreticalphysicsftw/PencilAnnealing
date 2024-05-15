@@ -70,6 +70,21 @@ namespace PA
 	inline auto FromLE(T x) -> T;
 	template <typename T>
 	inline auto FromBE(T x) -> T;
+
+	template <typename TWord = U64>
+	class DynamicBitsetBase
+	{
+		Array<TWord> data;
+
+	public:
+		DynamicBitsetBase(U32 size = 0);
+		auto Expand(U32 size) -> V;
+		auto SetBitUnsafe(U32 idx) -> V;
+		auto ClearBitUnsafe(U32 idx) -> V;
+		auto GetBitUnsafe(U32 idx) -> B;
+	};
+
+	using DynamicBitset = DynamicBitsetBase<>;
 }
 
 
@@ -267,5 +282,53 @@ namespace PA
 			return ByteSwap(x);
 		}
 		return x;
+	}
+
+
+	template<typename TWord>
+	inline DynamicBitsetBase<TWord>::DynamicBitsetBase(U32 size)
+	{
+		Expand(size);
+	}
+
+
+	template<typename TWord>
+	inline auto DynamicBitsetBase<TWord>::Expand(U32 size) -> V
+	{
+		auto minSize = (size + sizeof(TWord) - 1) / sizeof(TWord);
+
+		if (data.size() < minSize)
+		{
+			data.resize(minSize, 0u);
+		}
+	}
+
+	template<typename TWord>
+	inline auto DynamicBitsetBase<TWord>::SetBitUnsafe(U32 idx) -> V
+	{
+		auto wordIdx = idx / sizeof(TWord);
+		auto bitIdx = idx % sizeof(TWord);
+
+		data[wordIdx] |= TWord(1) << bitIdx;
+	}
+
+
+	template<typename TWord>
+	inline auto DynamicBitsetBase<TWord>::ClearBitUnsafe(U32 idx) -> V
+	{
+		auto wordIdx = idx / sizeof(TWord);
+		auto bitIdx = idx % sizeof(TWord);
+
+		data[wordIdx] &= ~(TWord(1) << bitIdx);
+	}
+
+
+	template<typename TWord>
+	inline auto DynamicBitsetBase<TWord>::GetBitUnsafe(U32 idx) -> B
+	{
+		auto wordIdx = idx / sizeof(TWord);
+		auto bitIdx = idx % sizeof(TWord);
+
+		return B(data[wordIdx] & (~(TWord(1) << bitIdx)));
 	}
 }
