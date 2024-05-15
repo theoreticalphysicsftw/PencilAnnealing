@@ -218,6 +218,7 @@ namespace PA
 		StaticArray<QuadraticBezier<TF, 2>, 64> stack;
 		auto stackSize = 0u;
 		stack[stackSize++] = screenCurve;
+
 		Map<U32, F32> rasterizedFragments;
 
 		while (stackSize)
@@ -230,19 +231,14 @@ namespace PA
 			if (roughApproxLength <= splitCutoff)
 			{
 				auto bBox = current.GetBBox();
-				auto xMin = Min(U32(Max(TF(0), Floor(bBox.lower[0] - halfCurveWidth))), width);
-				auto xMax = Min(U32(Max(TF(0), Ceil(bBox.upper[0] + halfCurveWidth))), width);
-				auto yMin = Min(U32(Max(TF(0), Floor(bBox.lower[1] - halfCurveWidth))), height);
-				auto yMax = Min(U32(Max(TF(0), Ceil(bBox.upper[1]) + halfCurveWidth)), height);
-				for (auto i = yMin ; i <= yMax; ++i)
+				auto xMin = Min(U32(Max(TF(0), Floor(bBox.lower[0] - halfCurveWidth))), width - 1);
+				auto xMax = Min(U32(Max(TF(0), Ceil(bBox.upper[0] + halfCurveWidth))), width - 1);
+				auto yMin = Min(U32(Max(TF(0), Floor(bBox.lower[1] - halfCurveWidth))), height - 1);
+				auto yMax = Min(U32(Max(TF(0), Ceil(bBox.upper[1]) + halfCurveWidth)), height - 1);
+				for (auto i = yMin; i <= yMax; ++i)
 				{
-					for (auto j = xMin ; j <= xMax; ++j)
+					for (auto j = xMin; j <= xMax; ++j)
 					{
-						if (j >= width || i >= height)
-						{
-							break;
-						}
-
 						auto idx = LebesgueCurve(j, i);
 						auto pixelCenter = Vector<TF, 2>(j, i) + TF(0.5);
 
@@ -362,6 +358,7 @@ namespace PA
 		PA_ASSERT(hdr.width == sdr.width && sdr.height == hdr.height);
 		PA_ASSERT(hdr.format == EFormat::A32Float);
 		PA_ASSERT(sdr.format == EFormat::A8);
+		PA_ASSERT(hdr.lebesgueOrdered && sdr.lebesgueOrdered);
 
 		auto hdrPtr = (F32*)hdr.data.data();
 		auto sdrPtr = (U8*)sdr.data.data();
