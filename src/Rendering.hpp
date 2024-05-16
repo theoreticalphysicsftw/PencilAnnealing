@@ -251,7 +251,7 @@ namespace PA
 
 						// auto dist = current.GetDistanceFrom(pixelCenter) - halfCurveWidth;
 						auto dist = Min(dist0, Min(dist1, dist2)) - halfCurveWidth;
-						auto val = color * Max(TF(0), TF(1) - SmoothStep(TF(0), TF(1.5), dist));
+						auto val = color * Max(TF(0), TF(1) - SmoothStep(TF(0), TF(0.75), dist));
 						if (val > valThreshold)
 						{
 							auto oldVal = rasterizedFragments.find(idx);
