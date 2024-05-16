@@ -28,6 +28,7 @@
 #include <bit>
 
 #include <algorithm>
+#include <format>
 
 #include "Types.hpp"
 #include "Concepts.hpp"
@@ -83,6 +84,9 @@ namespace PA
 		auto ClearBitUnsafe(U32 idx) -> V;
 		auto GetBitUnsafe(U32 idx) -> B;
 	};
+
+	template< class... TArgs >
+	auto Format(std::format_string<TArgs...> fmt, TArgs&&... args) -> Str;
 
 	using DynamicBitset = DynamicBitsetBase<>;
 }
@@ -272,6 +276,12 @@ namespace PA
 			return ByteSwap(x);
 		}
 		return x;
+	}
+
+	template<class ...TArgs>
+	auto Format(std::format_string<TArgs...> fmt, TArgs&&... args) -> Str
+	{
+		return std::format(fmt, args...);
 	}
 
 	template <typename T>
