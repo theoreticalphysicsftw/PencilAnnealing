@@ -128,9 +128,9 @@ namespace PA
 
 		FindEdgeSupport();
 
-		this->maxWidth = 10;
+		this->maxWidth = 4;
 		this->maxStrokes = maxStrokes ? maxStrokes : (reference->width * reference->height / 256);
-		this->maxSteps = maxSteps ? maxSteps : (1u << 25);
+		this->maxSteps = maxSteps ? maxSteps : (1u << 26);
 		this->maxTemperature = 255 * 255;
 		temperature = maxTemperature;
 
@@ -165,7 +165,14 @@ namespace PA
 	{
 		PruneCurves();
 		SaveProgress();
-		SerializeToSVG(Span<const QuadraticBezier>(strokes), grayscaleReference.width, grayscaleReference.height);
+		SerializeToSVG
+		(
+			Span<const QuadraticBezier>(strokes),
+			Span<const TF>(widths),
+			Span<const TF>(pigments),
+			grayscaleReference.width,
+			grayscaleReference.height
+		);
 	}
 
 	template<typename TF>
@@ -314,7 +321,7 @@ namespace PA
 
 		auto startTime = GetTimeStampUS();
 
-		temperature = temperature * TF(0.9999);
+		temperature = temperature * TF(0.999);
 
 		auto strokeIdx = GetUniformU32(0, strokes.size() - 1);
 

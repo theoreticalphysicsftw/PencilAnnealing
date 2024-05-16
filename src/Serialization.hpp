@@ -30,7 +30,15 @@
 namespace PA
 {
 	template <typename TF>
-	inline auto SerializeToSVG(Span<const QuadraticBezier<TF, 2>> normalizedCoords, U32 width, U32 height, StrView outFile = "out.svg"sv);
+	inline auto SerializeToSVG
+	(
+		Span<const QuadraticBezier<TF, 2>> normalizedCoords,
+		Span<const TF> widths,
+		Span<const TF> pigments,
+		U32 width,
+		U32 height,
+		StrView outFile = "out.svg"sv
+	);
 
 	template <typename T>
 		requires CIsArithmetic<T>
@@ -79,16 +87,31 @@ namespace PA
 namespace PA
 {
 	template<typename TF>
-	auto SerializeToSVG(Span<const QuadraticBezier<TF, 2>> normalizedCoords, U32 width, U32 height, StrView outFile)
+	auto SerializeToSVG
+	(
+		Span<const QuadraticBezier<TF, 2>> normalizedCoords,
+		Span<const TF> widths,
+		Span<const TF> pigments,
+		U32 width,
+		U32 height,
+		StrView outFile
+	)
 	{
 		Str svg = "<svg xmlns = \"http://www.w3.org/2000/svg\" width =\"";
 		svg += ToString(width);
 		svg += "\" height=\"" + ToString(height) + "\"";
 		svg += " viewBox=\"0 0 " + ToString(width) + " ";
 		svg += ToString(height) + "\">\n";
-		svg += "<path fill=\"none\" stroke=\"#010101\" stroke-width=\"0.5\" d=\"";
-		for (auto& q : normalizedCoords)
+		svg += "<style>path { mix-blend-mode: darken; }</style>\n";
+
+		for (auto i = 0; i < normalizedCoords.size(); ++i)
 		{
+			const auto& q = normalizedCoords[i];
+			const auto& w = widths[i];
+			const auto pigment = ClampedU8(255u - 255u * pigments[i]);
+			const auto color = ColorU32(pigment, pigment, pigment, 255);
+			const auto hexColor = '#' + Format("{:08x}", color.packed);
+
 			auto qp0 = ToSurfaceCoordinates(q.p0, width, height);
 			auto qp1 = ToSurfaceCoordinates(q.p1, width, height);
 			auto qp2 = ToSurfaceCoordinates(q.p2, width, height);
@@ -99,12 +122,17 @@ namespace PA
 			auto cp1 = qp0 + TF(2) / TF(3) * (qp1 - qp0);
 			auto cp2 = qp2 + TF(2) / TF(3) * (qp1 - qp2);
 
+			svg += "<path fill=\"none\" ";
+			svg += "stroke=\"" + hexColor + "\" ";
+			svg += "stroke-width=\"" + ToString(w) + "\" ";
+			svg += "d=\"";
 			svg += "M " + ToString(qp0[0]) + " " + ToString(qp0[1]) + " ";
 			svg += "C " + ToString(cp1[0]) + " " + ToString(cp1[1]) + " ";
 			svg += ToString(cp2[0]) + " " + ToString(cp2[1]) + " ";
 			svg += ToString(qp2[0]) + " " + ToString(qp2[1]) + " ";
+			svg += "\"/>\n";
 		}
-		svg += "\"/>\n";
+
 		svg += "</svg>";
 		WriteWholeFile(outFile, { (const Byte*)svg.data(), svg.size() });
 	}
