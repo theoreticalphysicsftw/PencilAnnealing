@@ -103,7 +103,7 @@ namespace PA
         }
 
         renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
-        screenTarget = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, width, height);
+        screenTarget = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ABGR8888, SDL_TEXTUREACCESS_STREAMING, width, height);
         return renderer != nullptr && screenTarget != nullptr;
     }
 
