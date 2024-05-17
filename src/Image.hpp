@@ -128,7 +128,7 @@ namespace PA
 
 	inline auto AdditiveBlendA8(const RawCPUImage& img0, const RawCPUImage& img1, F32 img0Contribution) -> RawCPUImage
 	{
-		PA_ASSERT(img0.width == img0.height && img1.width == img1.height);
+		PA_ASSERT(img0.width == img0.width && img1.height == img1.height);
 		PA_ASSERT(img0.lebesgueOrdered && img1.lebesgueOrdered);
 		PA_ASSERT(img0.format == EFormat::A8 && img1.format == EFormat::A8);
 
@@ -147,7 +147,7 @@ namespace PA
 
 	inline auto A32FloatToRGBA8Linear(const RawCPUImage& img) -> RawCPUImage
 	{
-		PA_ASSERT(img.format == EFormat::A8);
+		PA_ASSERT(img.format == EFormat::A32Float);
 		PA_ASSERT(img.lebesgueOrdered == true);
 		RawCPUImage result(img.width, img.height, EFormat::RGBA8, false);
 
