@@ -38,24 +38,24 @@ namespace PA
 		U32 packed;
 		struct
 		{
-			U8 a;
-			U8 b;
-			U8 g;
 			U8 r;
+			U8 g;
+			U8 b;
+			U8 a;
 		};
 		struct
 		{
-			U8 a0;
-			U8 cr;
-			U8 cb;
 			U8 y;
+			U8 cb;
+			U8 cr;
+			U8 a0;
 		};
 		struct
 		{
-			U8 a1;
-			U8 v;
-			U8 u;
 			U8 y0;
+			U8 u;
+			U8 v;
+			U8 a1;
 		};
 
 		ColorU32(U32 raw = 0);
