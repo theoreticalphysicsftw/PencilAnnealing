@@ -33,8 +33,11 @@ namespace PA
 	inline auto ReadWholeFile(StrView path, Array<Byte>& data) -> B;
 	inline auto WriteWholeFile(StrView path, Span<const Byte> data) -> B;
     inline auto FileExists(StrView path) -> B;
+    inline auto RemoveDirectoryRecursive(StrView path) -> B;
+    inline auto CreateDirectory(StrView path) -> B;
 
     using Path = std::filesystem::path;
+    using ErrorCode = std::error_code;
 }
 
 
@@ -57,11 +60,14 @@ namespace PA
 
         if (fread(data.data(), size, 1, handle) < 1)
         {
+            fclose(handle);
             return false;
         }
 
+        fclose(handle);
         return true;
 	}
+
 
 	auto WriteWholeFile(StrView path, Span<const Byte> data) -> B
 	{
@@ -74,11 +80,14 @@ namespace PA
 
         if (fwrite(data.data(), data.size(), 1, handle) < 1)
         {
+            fclose(handle);
             return false;
         }
 
+        fclose(handle);
         return true;
 	}
+
 
     inline auto FileExists(StrView p) -> B
     {
@@ -88,5 +97,19 @@ namespace PA
             return true;
         }
         return false;
+    }
+
+
+    inline auto RemoveDirectoryRecursive(StrView path) -> B
+    {
+        ErrorCode ec;
+        std::filesystem::remove_all(Path(path), ec);
+        return ec.value() != -1;
+    }
+
+
+    inline auto CreateDirectory(StrView path) -> B
+    {
+        return std::filesystem::create_directory(Path(path));
     }
 }
