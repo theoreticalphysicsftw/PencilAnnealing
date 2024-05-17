@@ -123,7 +123,7 @@ namespace PA
 			const auto& q = normalizedCoords[i];
 			const auto& w = widths[i];
 			const auto pigment = ClampedU8(255u - 255u * pigments[i]);
-			const auto color = ColorU32(pigment, pigment, pigment, 255);
+			const auto color = ColorU32(255u, pigment, pigment, pigment);
 			const auto hexColor = '#' + Format("{:08x}", color.packed);
 
 			auto qp0 = ToSurfaceCoordinates(q.p0, width, height);
