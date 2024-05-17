@@ -28,15 +28,53 @@
 namespace PA
 {
 	template <typename TInputIt, typename T>
-	auto Find(TInputIt first, TInputIt last, const T& v) -> TInputIt;
+	inline auto Find(TInputIt first, TInputIt last, const T& v) -> TInputIt;
+
+	template <class TContainer>
+	inline auto Fill(TContainer& c, const typename TContainer::value_type& value) -> V;
+
+	template <typename T>
+	inline auto GenerateSequence(T first, T last) -> Array<T>;
+
+	template <typename TContainer, typename TComp>
+	inline auto Sort(TContainer& c, TComp comp) -> V;
 }
 
 
 namespace PA
 {
 	template<typename TInputIt, typename T>
-	auto Find(TInputIt first, TInputIt last, const T& v) -> TInputIt
+	inline auto Find(TInputIt first, TInputIt last, const T& v) -> TInputIt
 	{
 		return std::find(first, last, v);
 	}
+
+
+	template <typename TContainer>
+	inline auto Fill(TContainer& c, const typename TContainer::value_type& value) -> V
+	{
+		std::fill(c.begin(), c.end(), value);
+	}
+
+
+	template<typename T>
+	auto GenerateSequence(T first, T last) -> Array<T>
+	{
+		Array<T> result;
+
+		for (auto i = first; i < last; ++i)
+		{
+			result.emplace_back(i);
+		}
+
+		return result;
+	}
+
+
+	template<typename TContainer, typename TComp>
+	auto Sort(TContainer& c, TComp comp) -> V
+	{
+		std::sort(c.begin(), c.end(), comp);
+	}
+
 }

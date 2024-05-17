@@ -42,9 +42,6 @@ namespace PA
 	inline auto ToString(const T& v) -> Str;
 	inline auto Terminate() -> V;
 
-	template <class TContainer>
-	inline auto Fill(TContainer& c, const typename TContainer::value_type& value) -> V;
-
 	template <typename TFrom, typename TTo>
 	inline auto MemCopy(Span<const TFrom> from, TTo* to) -> V;
 	
@@ -119,12 +116,6 @@ namespace PA
 		std::abort();
 	}
 
-
-	template <typename TContainer>
-	inline auto Fill(TContainer& c, const typename TContainer::value_type& value) -> V
-	{
-		std::fill(c.begin(), c.end(), value);
-	}
 
 	template<typename TFrom, typename TTo>
 	auto MemCopy(Span<const TFrom> from, TTo* to) -> V
@@ -278,10 +269,10 @@ namespace PA
 		return x;
 	}
 
-	template<class ...TArgs>
+	template<class... TArgs>
 	auto Format(std::format_string<TArgs...> fmt, TArgs&&... args) -> Str
 	{
-		return std::format(fmt, args...);
+		return std::format<TArgs...>(fmt, args...);
 	}
 
 	template <typename T>
