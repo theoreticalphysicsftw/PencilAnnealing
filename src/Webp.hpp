@@ -33,7 +33,7 @@
 namespace PA
 {
 	inline auto DecodeWebP(Span<const Byte> data) -> RawCPUImage;
-	inline auto EncodeWebP(const RawCPUImage& img, F32 qf = 0.5f) -> Array<Byte>;
+	inline auto EncodeWebP(const RawCPUImage& img, F32 qf = 50.f) -> Array<Byte>;
 }
 
 namespace PA

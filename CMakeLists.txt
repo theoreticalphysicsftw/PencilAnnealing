@@ -43,6 +43,7 @@ file(
         "extern/libwebp/src/mux/*.c"
         "extern/libwebp/src/demux/*.c"
         "extern/libwebp/src/utils/*.c"
+        "extern/libwebp/sharpyuv/*.c"
     )
 
 add_executable(${PROJECT_NAME} ${PA_SOURCES})
@@ -68,4 +69,5 @@ foreach(TEST_SOURCE ${PA_TESTS})
     cmake_path(GET TEST_SOURCE STEM TEST_NAME)
     add_executable(${TEST_NAME} ${TEST_SOURCE})
     target_include_directories(${TEST_NAME} PUBLIC "src")
+    target_include_directories(${TEST_NAME} PUBLIC "extern")
 endforeach()
