@@ -26,6 +26,7 @@
 #include "File.hpp"
 #include "Webp.hpp"
 #include "Utilities.hpp"
+#include "Algorithm.hpp"
 #include "Concepts.hpp"
 
 namespace PA
@@ -160,6 +161,106 @@ namespace PA
 	}
 
 
+	template<typename TF>
+	auto SerializeToFrames
+	(
+		Span<const QuadraticBezier<TF, 2>> normalizedCoords,
+		Span<const TF> widths,
+		Span<const TF> pigments,
+		U32 width,
+		U32 height,
+		StrView outFolder
+	)
+	{
+		Log("Serializing to frames");
+		RemoveDirectoryRecursive(outFolder);
+		CreateDirectory(outFolder);
+
+		auto frameCount = 0u;
+		auto seq = GenerateSequence(U32(0), U32(normalizedCoords.size()));
+
+		Sort
+		(
+			seq, 
+			[&](U32 i0, U32 i1)
+			{ 
+				const auto& c0 = normalizedCoords[i0];
+				const auto w0 = widths[i0];
+				const auto p0 = pigments[i0];
+				const auto& c1 = normalizedCoords[i1];
+				const auto w1 = widths[i1];
+				const auto p1 = pigments[i1];
+				auto c0LenApprox = Distance(c0.p0, c0.p1) + Distance(c0.p1, c0.p2);
+				auto c1LenApprox = Distance(c1.p0, c1.p1) + Distance(c1.p1, c1.p2);
+
+				if (w0 > w1)
+				{
+					return true;
+				}
+				else if (p0 < p1)
+				{
+					return true;
+				}
+				else if (c0LenApprox > c1LenApprox)
+				{
+					return true;
+				}
+				else
+				{
+					return false;
+				}
+			}
+		);
+
+		RawCPUImage surface(width, height, EFormat::A32Float, true);
+		Array<Fragment> fragments;
+		surface.Clear(TF(1));
+
+		static constexpr U32 logAfterFrames = 128;
+		U32 curvesPerFrame = 0;
+		for (auto i = 0u; i < seq.size(); ++i)
+		{
+			auto idx = seq[i];
+			auto& curve = normalizedCoords[idx];
+			auto lengthApprox = Distance(curve.p0, curve.p1) + Distance(curve.p1, curve.p2);
+			auto strokeSegmentation = U32(TF(5) * lengthApprox);
+			auto multiCurvesPerFrame = (lengthApprox < TF(0.05))? true : false;
+
+			for (auto s = 1u; s < strokeSegmentation; ++s)
+			{
+				auto splitPoint = TF(s) / strokeSegmentation;
+				auto currentCurve = curve.Split(splitPoint).first;
+
+				RasterizeToFragments(currentCurve, fragments, width, height, pigments[idx], widths[idx]);
+				PutFragmentsOnHDRSurface(fragments, surface);
+				SerializeToWebP(surface, (Path(outFolder) / Format("frame{:06d}.webp", frameCount)).string());
+				RemoveFragmentsFromHDRSurface(fragments, surface);
+				frameCount++;
+			}
+
+			RasterizeToFragments(curve, fragments, width, height, pigments[idx], widths[idx]);
+			PutFragmentsOnHDRSurface(fragments, surface);
+
+			if (multiCurvesPerFrame && curvesPerFrame < 4 && i != seq.size() - 1)
+			{
+				SerializeToWebP(surface, (Path(outFolder) / Format("frame{:06d}.webp", frameCount)).string());
+				curvesPerFrame = 0;
+			}
+			else
+			{
+				curvesPerFrame++;
+			}
+
+			frameCount++;
+			if (i % logAfterFrames == 0)
+			{
+				auto progress = F32(i) / seq.size() * 100;
+				Log(Format("Progress: {:3.2f}%", progress));
+			}
+		}
+	}
+
+
 	template<typename T>
 		requires CIsArithmetic<T>
 	auto Serialize(Array<Byte>& outBuffer, T in) -> B
@@ -170,6 +271,7 @@ namespace PA
 		MemCopy(Span<const T>((const T*)&in, 1), outBuffer.data() + oldSize);
 		return true;
 	}
+
 
 	template<typename T, U32 Dim>
 	auto Serialize(Array<Byte>& outBuffer, Vector<T, Dim> in) -> B
