@@ -24,6 +24,7 @@
 #include "Rendering.hpp"
 #include "Image.hpp"
 #include "File.hpp"
+#include "Webp.hpp"
 #include "Utilities.hpp"
 #include "Concepts.hpp"
 
@@ -38,6 +39,19 @@ namespace PA
 		U32 width,
 		U32 height,
 		StrView outFile = "out.svg"sv
+	);
+
+	inline auto SerializeToWebP(RawCPUImage& hdrSurface, StrView outFile = "out.webp");
+
+	template <typename TF>
+	inline auto SerializeToFrames
+	(
+		Span<const QuadraticBezier<TF, 2>> normalizedCoords,
+		Span<const TF> widths,
+		Span<const TF> pigments,
+		U32 width,
+		U32 height,
+		StrView outFolder = "out"sv
 	);
 
 	template <typename T>
@@ -135,6 +149,14 @@ namespace PA
 
 		svg += "</svg>";
 		WriteWholeFile(outFile, { (const Byte*)svg.data(), svg.size() });
+	}
+
+
+	inline auto SerializeToWebP(RawCPUImage& hdrSurface, StrView outFile)
+	{
+		auto rgba8Surface = A32FloatToRGBA8Linear(hdrSurface);
+		auto webpEncoded = EncodeWebP(rgba8Surface, 70);
+		WriteWholeFile(outFile, Span<const Byte>(webpEncoded.data(), webpEncoded.size()));
 	}
 
 

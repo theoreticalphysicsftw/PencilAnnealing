@@ -173,6 +173,7 @@ namespace PA
 			grayscaleReference.width,
 			grayscaleReference.height
 		);
+		SerializeToWebP(workingApproximationHDR);
 	}
 
 	template<typename TF>
