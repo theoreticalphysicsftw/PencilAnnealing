@@ -26,6 +26,7 @@
 #include "Types.hpp"
 #include "Algebra.hpp"
 #include "ThreadPool.hpp"
+#include "Color.hpp"
 
 
 namespace PA
@@ -85,6 +86,8 @@ namespace PA
 	inline auto ToSurfaceCoordinates(Span<Vector<TF, 2>> in, U32 width, U32 height) -> V;
 
 	inline auto AdditiveBlendA8(const RawCPUImage& img0, const RawCPUImage& img1, F32 img0Contribution) -> RawCPUImage;
+
+	inline auto A32FloatToRGBA8Linear(const RawCPUImage & img)->RawCPUImage;
 }
 
 
@@ -138,6 +141,28 @@ namespace PA
 			result.data[i] = ClampedU8(img0Contribution * img0.data[i] + (1.f - img0Contribution) * img1.data[i]);
 		}
 
+		return result;
+	}
+
+
+	inline auto A32FloatToRGBA8Linear(const RawCPUImage& img) -> RawCPUImage
+	{
+		PA_ASSERT(img.format == EFormat::A8);
+		PA_ASSERT(img.lebesgueOrdered == true);
+		RawCPUImage result(img.width, img.height, EFormat::RGBA8, false);
+
+		auto inPtr = (const F32*)img.data.data();
+		auto outPtr = (ColorU32*)result.data.data();
+
+		for (auto i = 0u; i < img.height; ++i)
+		{
+			for (auto j = 0; j < img.width; ++j)
+			{
+				auto lebesgueIdx = LebesgueCurve(j, i);
+				auto color = ClampedU8(255.f * (inPtr[lebesgueIdx]));
+				outPtr[i * img.width + j] = ColorU32(color, color, color, 255u);
+			}
+		}
 		return result;
 	}
 
