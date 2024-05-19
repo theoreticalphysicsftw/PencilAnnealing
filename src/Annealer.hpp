@@ -141,18 +141,19 @@ namespace PA
 		else
 		{
 			InitBezier();
-			fragmentsMap.resize(strokes.size());
-			RasterizeToFragments
-			(
-				Span<const QuadraticBezier>(strokes),
-				Span<const TF>(widths),
-				Span<const TF>(pigments),
-				fragmentsMap,
-				grayscaleReference.width,
-				grayscaleReference.height,
-				threadPool
-			);
 		}
+
+		fragmentsMap.resize(strokes.size());
+		RasterizeToFragments
+		(
+			Span<const QuadraticBezier>(strokes),
+			Span<const TF>(widths),
+			Span<const TF>(pigments),
+			fragmentsMap,
+			grayscaleReference.width,
+			grayscaleReference.height,
+			threadPool
+		);
 
 		PutFragmentsOnHDRSurface(fragmentsMap, workingApproximationHDR);
 		CopyHDRSurfaceToGSSurface(workingApproximationHDR, workingApproximation);
@@ -165,6 +166,7 @@ namespace PA
 	{
 		PruneCurves();
 		SaveProgress();
+		SerializeToWebP(workingApproximationHDR);
 		SerializeToSVG
 		(
 			Span<const QuadraticBezier>(strokes),
@@ -173,7 +175,14 @@ namespace PA
 			grayscaleReference.width,
 			grayscaleReference.height
 		);
-		SerializeToWebP(workingApproximationHDR);
+		SerializeToVideo
+		(
+			Span<const QuadraticBezier>(strokes),
+			Span<const TF>(widths),
+			Span<const TF>(pigments),
+			grayscaleReference.width,
+			grayscaleReference.height
+		);
 	}
 
 	template<typename TF>
@@ -411,7 +420,7 @@ namespace PA
 			}
 			else if (opType == OpType::Add)
 			{
-				AddCurve(Move(newCurve), Move(newFragments), newPigment, newWidth);
+				AddCurve(Move(newCurve), Move(newFragments), newWidth, newPigment);
 			}
 			else
 			{
