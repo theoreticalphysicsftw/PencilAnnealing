@@ -31,8 +31,9 @@
 namespace PA
 {
 	inline auto ReadWholeFile(StrView path, Array<Byte>& data) -> B;
-	inline auto WriteWholeFile(StrView path, Span<const Byte> data) -> B;
+	inline auto WriteWholeFile(StrView path, Span<const Byte> data, B append = false) -> B;
     inline auto FileExists(StrView path) -> B;
+    inline auto RemoveFile(StrView path) -> B;
     inline auto RemoveDirectoryRecursive(StrView path) -> B;
     inline auto CreateDirectory(StrView path) -> B;
 
@@ -69,9 +70,9 @@ namespace PA
 	}
 
 
-	auto WriteWholeFile(StrView path, Span<const Byte> data) -> B
+	auto WriteWholeFile(StrView path, Span<const Byte> data, B append) -> B
 	{
-        auto handle = fopen(Str(path).c_str(), "wb");
+        auto handle = fopen(Str(path).c_str(), append? "ab" : "wb");
 
         if (!handle)
         {
@@ -97,6 +98,12 @@ namespace PA
             return true;
         }
         return false;
+    }
+
+
+    inline auto RemoveFile(StrView path) -> B
+    {
+        std::filesystem::remove(path);
     }
 
 
