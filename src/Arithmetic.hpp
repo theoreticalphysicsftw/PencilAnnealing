@@ -27,6 +27,7 @@
 #include <limits>
 
 #include "Types.hpp"
+#include "Utilities.hpp"
 
 namespace PA
 {
