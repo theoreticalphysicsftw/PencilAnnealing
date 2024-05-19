@@ -55,6 +55,10 @@ target_compile_definitions(${PROJECT_NAME} PUBLIC $<$<CONFIG:Release>:PA_RELEASE
 add_subdirectory("extern/SDL2")
 target_link_libraries(${PROJECT_NAME} SDL2-static)
 
+add_subdirectory("extern/libtheora")
+target_link_libraries(${PROJECT_NAME} theora)
+target_include_directories(${PROJECT_NAME} PUBLIC "extern/libtheora/include")
+
 add_library(libwebp ${LIBWEBP_SOURCES})
 target_include_directories(libwebp PUBLIC "extern/libwebp")
 target_link_libraries(${PROJECT_NAME} libwebp)
@@ -70,4 +74,5 @@ foreach(TEST_SOURCE ${PA_TESTS})
     add_executable(${TEST_NAME} ${TEST_SOURCE})
     target_include_directories(${TEST_NAME} PUBLIC "src")
     target_include_directories(${TEST_NAME} PUBLIC "extern")
+    target_include_directories(${TEST_NAME} PUBLIC "extern/libtheora/include")
 endforeach()
