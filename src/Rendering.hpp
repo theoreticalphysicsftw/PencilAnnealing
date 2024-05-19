@@ -303,7 +303,7 @@ namespace PA
 			{
 				for (auto i = start; i < end; ++i)
 				{
-					RasterizeToFragments(curves[i], fragMap[i], width, height, widths[i], pigments[i]);
+					RasterizeToFragments(curves[i], fragMap[i], width, height, pigments[i], widths[i]);
 				}
 			};
 
