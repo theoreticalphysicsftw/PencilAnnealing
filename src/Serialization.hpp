@@ -206,15 +206,15 @@ namespace PA
 				auto c0LenApprox = Distance(c0.p0, c0.p1) + Distance(c0.p1, c0.p2);
 				auto c1LenApprox = Distance(c1.p0, c1.p1) + Distance(c1.p1, c1.p2);
 
-				if (w0 > w1)
+				if (p0 > p1)
 				{
 					return true;
 				}
-				else if (p0 < p1)
+				else if (p0 == p1 && w0 > w1)
 				{
 					return true;
 				}
-				else if (c0LenApprox > c1LenApprox)
+				else if (p0 == p1 && w0 == w1 && c0LenApprox > c1LenApprox)
 				{
 					return true;
 				}
@@ -283,6 +283,7 @@ namespace PA
 		cfg.width = width;
 		cfg.height = height;
 		cfg.fps = 30;
+		cfg.crf = 63;
 		cfg.outFileName = outFile;
 		VideoEncoder encoder(cfg);
 
@@ -309,11 +310,11 @@ namespace PA
 				{
 					return true;
 				}
-				else if (p0 < p1)
+				else if (w0 == w1 && p0 > p1)
 				{
 					return true;
 				}
-				else if (c0LenApprox > c1LenApprox)
+				else if (p0 == p1 && w0 == w1 && c0LenApprox > c1LenApprox)
 				{
 					return true;
 				}
@@ -368,6 +369,7 @@ namespace PA
 			{
 				auto progress = F32(i) / seq.size() * 100;
 				Log(Format("Progress: {:3.2f}%", progress));
+				SerializeToWebP(surface, "debug.webp");
 			}
 		}
 		encoder.FlushCacheToDisk();
