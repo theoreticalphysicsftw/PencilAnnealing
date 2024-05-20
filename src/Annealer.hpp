@@ -242,6 +242,13 @@ namespace PA
 			auto& oldCurve = strokes[i];
 			auto& oldFragments = fragmentsMap[i];
 
+			if (oldFragments.empty())
+			{
+				RemoveCurve(i);
+				i--;
+				continue;
+			}
+
 			auto localEnergy = GetLocalEnergy(workingApproximation, oldFragments, Array<Fragment>());
 
 			RemoveFragmentsFromHDRSurface(oldFragments, workingApproximationHDR);
