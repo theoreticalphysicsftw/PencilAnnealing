@@ -16,8 +16,6 @@
 // along with PencilAnnealing.  If not, see <http://www.gnu.org/licenses/>.
 
 
-
-
 #pragma once
 
 #include "Vector.hpp"
