@@ -26,6 +26,7 @@
 using namespace PA;
 
 static constexpr StrView CDefaultInImagePath = "in.webp"sv;
+static constexpr B CRecordOptimization = true;
 
 I32 main(I32 argc, C** argv)
 {
@@ -58,13 +59,32 @@ I32 main(I32 argc, C** argv)
 	Annealer<F32> annealer(&decodedImage);
 
 	Thread annealingThread([&]() { while (!PresentSurface::IsClosed() && annealer.AnnealBezier()); annealer.ShutDownThreadPool(); });
+	
+
+
+	VideoEncoder* encoder = nullptr;
+	if (CRecordOptimization)
+	{
+		VideoEncoder::Config cfg;
+		cfg.width = decodedImage.width;
+		cfg.height = decodedImage.height;
+		cfg.fps = 30;
+		cfg.crf = 63;
+		cfg.outFileName = "optimization.ogv";
+		RemoveFile(cfg.outFileName);
+		encoder = new VideoEncoder(cfg);
+	}
 
 	PresentSurface::AddRenderingCode
 	(
-		[&annealer]()
+		[&annealer, encoder]()
 		{
 			auto target = PresentSurface::LockScreenTarget();
 			annealer.CopyCurrentApproximationToColor((ColorU32*)target.data, target.stride);
+			if (CRecordOptimization)
+			{
+				encoder->EncodeRGBA8Linear(target, false);
+			}
 			PresentSurface::UnlockScreenTarget();
 		}
 	);
