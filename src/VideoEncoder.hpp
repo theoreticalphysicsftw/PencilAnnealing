@@ -49,7 +49,9 @@ namespace PA
 
 		VideoEncoder(const Config& cfg = Config());
 		~VideoEncoder();
+		auto EncodeRGBA8Linear(const LockedTexture& in, B lastFrame = false) -> V;
 		auto EncodeA32Float(const RawCPUImage& img, B lastFrame = false) -> V;
+		auto EncodeYCbCr(Array<Byte>& yData, Array<Byte> cbData, Array<Byte> crData, B lastFrame = false) -> V;
 		auto FlushCacheToDisk() -> V;
 
 	private:
@@ -150,6 +152,31 @@ namespace PA
 		ogg_stream_clear(&oggStream);
 	}
 
+	inline auto VideoEncoder::EncodeRGBA8Linear(const LockedTexture& img, B lastFrame) -> V
+	{
+		auto paddedWidth = theoraInfo.frame_width;
+		auto paddedHeight = theoraInfo.frame_height;
+		auto paddedSize = paddedWidth * paddedHeight;
+		Array<Byte> yData(paddedSize);
+		Array<Byte> cbData(paddedSize / 4);
+		Array<Byte> crData(paddedSize / 4);
+
+		auto inPtr = (const ColorU32*)img.data;
+		for (auto y = 0; y < img.height; ++y)
+		{
+			for (auto x = 0; x < img.width; ++x)
+			{
+				auto idx = y * img.stride / 4 + x;
+				auto inColor = RGBAToYCbCrABT601(inPtr[idx]);
+				yData[y * paddedWidth + x] = inColor.y;
+				cbData[y / 2 * paddedWidth / 2 + x / 2] = inColor.cb;
+				crData[y / 2 * paddedWidth / 2 + x / 2] = inColor.cr;
+			}
+		}
+
+		EncodeYCbCr(yData, cbData, crData, lastFrame);
+	}
+
 
 	inline auto VideoEncoder::EncodeA32Float(const RawCPUImage& img, B lastFrame) -> V
 	{
@@ -177,6 +204,15 @@ namespace PA
 			}
 		}
 
+		EncodeYCbCr(yData, cbData, crData, lastFrame);
+	}
+
+
+	inline auto VideoEncoder::EncodeYCbCr(Array<Byte>& yData, Array<Byte> cbData, Array<Byte> crData, B lastFrame) -> V
+	{
+		auto paddedWidth = theoraInfo.frame_width;
+		auto paddedHeight = theoraInfo.frame_height;
+
 		th_ycbcr_buffer inBuffer;
 		inBuffer[0].width = paddedWidth;
 		inBuffer[0].height = paddedHeight;
@@ -188,7 +224,7 @@ namespace PA
 		inBuffer[1].data = cbData.data();
 		inBuffer[2].width = paddedWidth / 2;
 		inBuffer[2].height = paddedHeight / 2;
-		inBuffer[2].stride = paddedWidth /2;
+		inBuffer[2].stride = paddedWidth / 2;
 		inBuffer[2].data = crData.data();
 
 		ogg_packet oggPacket;
