@@ -22,6 +22,7 @@
 #include "Time.hpp"
 #include "Algebra.hpp"
 #include "Error.hpp"
+#include "Image.hpp"
 
 #define SDL_MAIN_HANDLED
 #include <SDL2/SDL.h>
@@ -29,14 +30,6 @@
 
 namespace PA
 {
-    struct LockedTexture
-    {
-        U32 width;
-        U32 height;
-        I32 stride;
-        Byte* data;
-    };
-
     struct PresentSurface
     {
         static auto Init(U32 height, U32 width, const C* appName = "PencilAnnealing") -> B;

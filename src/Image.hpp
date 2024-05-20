@@ -48,6 +48,14 @@ namespace PA
 		U32 d;
 	};
 
+	struct LockedTexture
+	{
+		U32 width;
+		U32 height;
+		I32 stride;
+		Byte* data;
+	};
+
 	struct RawCPUImage
 	{
 		B lebesgueOrdered;
