@@ -46,7 +46,7 @@ namespace PA
 
 	private:
         static constexpr U32 logAfterSteps = 1024;
-		static constexpr U32 updateScreenAfterSteps = 4096;
+		static constexpr U32 updateScreenAfterSteps = 1024;
 		static constexpr StrView CSaveFile = "save.pa"sv;
 
 		auto GetEnergy(const RawCPUImage& img0) -> TF;
