@@ -67,6 +67,7 @@ namespace PA
 
 	inline auto YCbCrAToRGBA(ColorU32) -> ColorU32;
 	inline auto RGBAToYCbCrA(ColorU32) -> ColorU32;
+	inline auto RGBAToYCbCrABT601(ColorU32) -> ColorU32;
 	inline auto YUVAToRGBA(ColorU32) -> ColorU32;
 	inline auto RGBAToYUVA(ColorU32) -> ColorU32;
 	inline auto RGBAToGrayscale(ColorU32) -> U8;
@@ -114,6 +115,16 @@ namespace PA
 		ycbcra.y = ClampedU8(0.299f * rgba.r + 0.587f * rgba.g + 0.114f * rgba.b);
 		ycbcra.cr = ClampedU8(128.f - 0.1687f * rgba.r - 0.3313f * rgba.g + 0.5f * rgba.b);
 		ycbcra.cb = ClampedU8(128.f + 0.5f * rgba.r - 0.4187f * rgba.g - 0.0813f * rgba.b);
+		ycbcra.a = rgba.a;
+		return ycbcra;
+	}
+
+	inline auto RGBAToYCbCrABT601(ColorU32 rgba) -> ColorU32
+	{
+		ColorU32 ycbcra;
+		ycbcra.y = U8(Clamp(16.f + 0.2567f * rgba.r + 0.5041f * rgba.g + 0.0980f * rgba.b, 16.f, 235.f));
+		ycbcra.cr = U8(Clamp(128.f - 0.1482f * rgba.r - 0.2909f * rgba.g + 0.4392f * rgba.b, 16.f, 240.f));
+		ycbcra.cb = U8(Clamp(128.f + 0.4392f * rgba.r - 0.3677f * rgba.g - 0.0714f * rgba.b, 16.f, 240.f));
 		ycbcra.a = rgba.a;
 		return ycbcra;
 	}

@@ -45,7 +45,7 @@ namespace PA
 			U32 fps = 30;
 			U32 crf = 56;
 
-			U64 cacheBufferMaxSize = U64(1) << 22;
+			U64 cacheBufferMaxSize = U64(1) << 18;
 			Str outFileName = "out.ogv";
 
 			B encodeToFile = true;
@@ -174,8 +174,8 @@ namespace PA
 			for (auto x = 0; x < img.width; ++x)
 			{
 				auto i = LebesgueCurve(x, y);
-				auto inGray = Min(16.f + Max(0.f, inPtr[i] * 235), 235.f);
-				auto inColor = RGBAToYCbCrA(ColorU32(inGray, inGray, inGray, 255u));
+				auto inGray = ClampedU8(inPtr[i] * 255);
+				auto inColor = RGBAToYCbCrABT601(ColorU32(inGray, inGray, inGray, 255u));
 				yData[y * paddedWidth + x] = inColor.y;
 				cbData[y / 2 * paddedWidth / 2 + x / 2] = inColor.cb;
 				crData[y / 2 * paddedWidth / 2 + x / 2] = inColor.cr;
