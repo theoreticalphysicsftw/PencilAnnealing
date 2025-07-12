@@ -112,6 +112,30 @@ namespace PA
     template <typename... Ts>
     using Variant = std::variant<Ts...>;
 
+    template<typename TR, class TVisitor, class... TVariants >
+    inline constexpr TR Visit(TVisitor&& vis, TVariants&&... vars)
+    {
+        return std::visit(vis, vars...);
+    }
+
+    template <typename T, typename... Ts>
+    inline constexpr auto HoldsAlternative(const Variant<Ts...>& v) -> B
+    {
+        return std::holds_alternative<T>(v);
+    }
+
+    template <typename T, typename... Ts>
+    constexpr auto Get(Variant<Ts...>& v) -> T&
+    {
+        return std::get<T>(v);
+    }
+
+    template <typename T, typename... Ts>
+    constexpr auto Get(const Variant<Ts...>& v) -> const T&
+    {
+        return std::get<T>(v);
+    }
+
     template <U32 size>
     struct StorageType
     {
@@ -120,6 +144,9 @@ namespace PA
 
     template <typename T>
     using RemoveReference = std::remove_reference_t<T>;
+
+    template <typename T>
+    using RemovePointer = std::remove_pointer_t<T>;
 
     template <typename T, typename U>
     constexpr auto IsSameType = std::is_same<T, U>::value;
