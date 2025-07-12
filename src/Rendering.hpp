@@ -66,9 +66,10 @@ namespace PA
 		ThreadPool<>& threadPool
 	) -> V;
 
-	inline auto PutFragmentsOnHDRSurface(Array<Fragment>& fragments, RawCPUImage& surface) -> V;
-	inline auto RemoveFragmentsFromHDRSurface(Array<Fragment>& fragments, RawCPUImage& surface) -> V;
-	inline auto PutFragmentsOnHDRSurface(Array<Array<Fragment>>& fragMap, RawCPUImage& surface) -> V;
+	inline auto AddFragmentsOnHDRSurface(Array<Fragment>& fragments, RawCPUImage& surface) -> V;
+	inline auto SubtractFragmentsFromHDRSurface(Array<Fragment>& fragments, RawCPUImage& surface) -> V;
+	inline auto AddFragmentsOnHDRSurface(Array<Array<Fragment>>& fragMap, RawCPUImage& surface) -> V;
+	inline auto SubtractFragmentsFromHDRSurface(Array<Array<Fragment>>& fragMap, RawCPUImage& surface) -> V;
 
 	inline auto CopyHDRSurfaceToGSSurface(RawCPUImage& hdr, RawCPUImage& sdr) -> V;
 	inline auto CopyHDRSurfaceToGSSurface(RawCPUImage& hdr, RawCPUImage& sdr, Span<const Fragment> fragments) -> V;
@@ -318,17 +319,7 @@ namespace PA
 	}
 
 
-	inline auto PutFragmentsOnHDRSurface(Array<Fragment>& fragments, RawCPUImage& surface) -> V
-	{
-		auto sPtr = (F32*)surface.data.data();
-		for (const auto& frag : fragments)
-		{
-			sPtr[frag.idx] -= frag.value;
-		}
-	}
-
-
-	inline auto RemoveFragmentsFromHDRSurface(Array<Fragment>& fragments, RawCPUImage& surface) -> V
+	inline auto AddFragmentsOnHDRSurface(Array<Fragment>& fragments, RawCPUImage& surface) -> V
 	{
 		auto sPtr = (F32*)surface.data.data();
 		for (const auto& frag : fragments)
@@ -338,11 +329,30 @@ namespace PA
 	}
 
 
-	inline auto PutFragmentsOnHDRSurface(Array<Array<Fragment>>& fragMap, RawCPUImage& surface) -> V
+	inline auto SubtractFragmentsFromHDRSurface(Array<Fragment>& fragments, RawCPUImage& surface) -> V
+	{
+		auto sPtr = (F32*)surface.data.data();
+		for (const auto& frag : fragments)
+		{
+			sPtr[frag.idx] -= frag.value;
+		}
+	}
+
+
+	inline auto AddFragmentsOnHDRSurface(Array<Array<Fragment>>& fragMap, RawCPUImage& surface) -> V
 	{
 		for (auto& fragments : fragMap)
 		{
-			PutFragmentsOnHDRSurface(fragments, surface);
+			AddFragmentsOnHDRSurface(fragments, surface);
+		}
+	}
+
+
+	inline auto SubtractFragmentsFromHDRSurface(Array<Array<Fragment>>& fragMap, RawCPUImage& surface) -> V
+	{
+		for (auto& fragments : fragMap)
+		{
+			SubtractFragmentsFromHDRSurface(fragments, surface);
 		}
 	}
 

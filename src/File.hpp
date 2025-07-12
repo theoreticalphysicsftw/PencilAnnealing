@@ -98,7 +98,7 @@ namespace PA
 
     inline auto RemoveFile(StrView path) -> B
     {
-        std::filesystem::remove(path);
+       return std::filesystem::remove(path);
     }
 
 

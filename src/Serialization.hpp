@@ -51,6 +51,8 @@ namespace PA
 		Span<const TF> pigments,
 		U32 width,
 		U32 height,
+		B darkOnLight,
+		U8 bgLightness,
 		StrView outFolder = "out"sv
 	);
 
@@ -63,6 +65,8 @@ namespace PA
 		Span<const TF> pigments,
 		U32 width,
 		U32 height,
+		B darkOnLight,
+		U8 bgLightness,
 		StrView outFile = "out.ogv"sv
 	);
 
@@ -180,12 +184,30 @@ namespace PA
 		Span<const TF> pigments,
 		U32 width,
 		U32 height,
+		B darkOnLight,
+		U8 bgLightness,
 		StrView outFolder
 	)
 	{
 		Log("Serializing to frames");
 		RemoveDirectoryRecursive(outFolder);
 		CreateDirectory(outFolder);
+
+		using FragmentsMapDrawFunc = Void(*)(Array<Array<Fragment>>& fragments, RawCPUImage& surface);
+		using FragmentsDrawFunc = Void(*)(Array<Fragment>& fragments, RawCPUImage& surface);
+		FragmentsDrawFunc PutFragmentsOnHDRSurface = nullptr;
+		FragmentsDrawFunc RemoveFragmentsFromHDRSurface = nullptr;
+
+		if (darkOnLight)
+		{
+			PutFragmentsOnHDRSurface = SubtractFragmentsFromHDRSurface;
+			RemoveFragmentsFromHDRSurface = AddFragmentsOnHDRSurface;
+		}
+		else
+		{
+			PutFragmentsOnHDRSurface = AddFragmentsOnHDRSurface;
+			RemoveFragmentsFromHDRSurface = SubtractFragmentsFromHDRSurface;
+		}
 
 		auto frameCount = 0u;
 		auto seq = GenerateSequence(U32(0), U32(normalizedCoords.size()));
@@ -273,9 +295,25 @@ namespace PA
 
 
 	template<typename TF>
-	auto SerializeToVideo(Span<const QuadraticBezier<TF, 2>> normalizedCoords, Span<const TF> widths, Span<const TF> pigments, U32 width, U32 height, StrView outFile)
+	auto SerializeToVideo(Span<const QuadraticBezier<TF, 2>> normalizedCoords, Span<const TF> widths, Span<const TF> pigments, U32 width, U32 height, B darkOnLight, U8 bgLightness, StrView outFile)
 	{
 		RemoveFile(outFile);
+
+		using FragmentsMapDrawFunc = Void(*)(Array<Array<Fragment>>& fragments, RawCPUImage& surface);
+		using FragmentsDrawFunc = Void(*)(Array<Fragment>& fragments, RawCPUImage& surface);
+		FragmentsDrawFunc PutFragmentsOnHDRSurface = nullptr;
+		FragmentsDrawFunc RemoveFragmentsFromHDRSurface = nullptr;
+
+		if (darkOnLight)
+		{
+			PutFragmentsOnHDRSurface = SubtractFragmentsFromHDRSurface;
+			RemoveFragmentsFromHDRSurface = AddFragmentsOnHDRSurface;
+		}
+		else
+		{
+			PutFragmentsOnHDRSurface = AddFragmentsOnHDRSurface;
+			RemoveFragmentsFromHDRSurface = SubtractFragmentsFromHDRSurface;
+		}
 
 		VideoEncoder::Config cfg;
 		cfg.width = width;
@@ -325,7 +363,7 @@ namespace PA
 
 		RawCPUImage surface(width, height, EFormat::A32Float, true);
 		Array<Fragment> fragments;
-		surface.Clear(1.f);
+		surface.Clear(bgLightness / 255.f);
 
 		static constexpr U32 logAfterFrames = 128;
 		U32 curvesPerFrame = 0;

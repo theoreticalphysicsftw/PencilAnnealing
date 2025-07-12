@@ -32,7 +32,7 @@ namespace PA
 {
     struct PresentSurface
     {
-        static auto Init(U32 height, U32 width, const C* appName = "PencilAnnealing") -> B;
+        static auto Init(U32 height, U32 width, U32 internalWidth = width, U32 internalHeight = height, const C* appName = "PencilAnnealing") -> B;
         static auto Destroy() -> V;
         static auto PresentLoop() -> V;
 
@@ -45,9 +45,12 @@ namespace PA
         static auto UnlockScreenTarget() -> V;
         static auto IsClosed() -> B;
 
+        static auto GetDisplayRes() -> Pair<U32, U32>;
+
     private:
         static auto PresentLoopIteration() -> V;
         static auto ProcessInput() -> V;
+        static auto InitVideo() -> B;
 
         inline static SDL_Window* window = nullptr;
         inline static SDL_Renderer* renderer = nullptr;
@@ -57,23 +60,41 @@ namespace PA
 
         inline static U32 width = 0;
         inline static U32 height = 0;
+        inline static U32 internalWidth = 0;
+        inline static U32 internalHeight = 0;
         inline static Atomic<B> isWindowClosed = false;
+        inline static B isVideoSystemReady = false;
     };
 }
 
 
 namespace PA
 {
-    auto PresentSurface::Init(U32 width, U32 height, const C* appName) -> B
+    auto PresentSurface::InitVideo() -> B
     {
-        if (SDL_Init(SDL_INIT_VIDEO) != 0)
+        if (!isVideoSystemReady)
         {
+            if (!SDL_Init(SDL_INIT_VIDEO))
+            {
+                isVideoSystemReady = true;
+                return true;
+            }
+
             isWindowClosed = true;
             return false;
         }
 
+        return true;
+    }
+
+    auto PresentSurface::Init(U32 width, U32 height, U32 internalWidth, U32 internalHeight, const C* appName) -> B
+    {
+        InitVideo();
+
         PresentSurface::width = width;
         PresentSurface::height = height;
+        PresentSurface::internalWidth = internalWidth;
+        PresentSurface::internalHeight = internalHeight;
 
         window = SDL_CreateWindow(
             appName,
@@ -91,7 +112,7 @@ namespace PA
         }
 
         renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
-        screenTarget = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ABGR8888, SDL_TEXTUREACCESS_STREAMING, width, height);
+        screenTarget = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ABGR8888, SDL_TEXTUREACCESS_STREAMING, internalWidth, internalHeight);
         return renderer != nullptr && screenTarget != nullptr;
     }
 
@@ -136,8 +157,7 @@ namespace PA
     {
         ProcessInput();
         renderFunction();
-        SDL_Rect copyRect = { 0, 0, (I32)width, (I32)height };
-        SDL_RenderCopy(renderer, screenTarget, &copyRect, &copyRect);
+        SDL_RenderCopy(renderer, screenTarget, nullptr, nullptr);
         SDL_RenderPresent(renderer);
     }
 
@@ -162,6 +182,22 @@ namespace PA
         return Vec2(width, height);
     }
 
+    inline auto PresentSurface::GetDisplayRes() -> Pair<U32, U32>
+    {
+        InitVideo();
+        SDL_DisplayMode dm;
+        Pair<U32, U32> result = {};
+        if (!SDL_GetDesktopDisplayMode(0, &dm))
+        {
+            result.first = dm.w;
+            result.second = dm.h;
+        }
+        else
+        {
+            Log(SDL_GetError());
+        }
+        return result;
+    }
 
     inline auto PresentSurface::LockScreenTarget() -> LockedTexture
     {

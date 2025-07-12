@@ -25,6 +25,7 @@
 #include "Serialization.hpp"
 #include "ThreadPool.hpp"
 #include "Convolution.hpp"
+#include "SDF.hpp"
 
 namespace PA
 {
@@ -38,14 +39,29 @@ namespace PA
 		using Arc = Arc<Scalar>;
 		using Line = Line<Scalar, 2>;
 
-		Annealer(const RawCPUImage* referance, U32 maxStrokes = 0, U32 maxSteps = 0);
+		struct Config
+		{
+			U32 maxStrokes = 0u;
+			U32 maxSteps = 1u << 26;
+			F32 maxWidth = 3.f;
+			F32 edgeContribution = 0.3f;
+			F32 screenCutoff = 0.2f;
+			F32 screenCutoffRadius = 0.2f;
+			U8 bgLightness = 255;
+			B serializeToSVG = true;
+			B serializeToVideo = true;
+			B darkOnLight = true;
+			B nonRandomStrokeSelection = false;
+		};
+
+		Annealer(const RawCPUImage* referance, const Config& cfg = Config());
 		~Annealer();
 		auto CopyCurrentApproximationToColor(ColorU32* data, U32 stride) -> V;
 		auto AnnealBezier() -> B;
 		auto ShutDownThreadPool() -> V;
 
 	private:
-        static constexpr U32 logAfterSteps = 1024;
+        static constexpr U32 logAfterSteps = 1u << 16;
 		static constexpr U32 updateScreenAfterSteps = 1024;
 		static constexpr StrView CSaveFile = "save.pa"sv;
 
@@ -63,6 +79,9 @@ namespace PA
 		auto SaveProgress() -> V;
 		auto LoadProgress() -> V;
 
+		auto InsideInterestRegion(U32 i, U32 j) const -> B;
+		auto InsideInterestRegion(U32 i) const -> B;
+
 		RawCPUImage grayscaleReference;
 		RawCPUImage grayscaleReferenceFiltered;
 		RawCPUImage currentApproximation;
@@ -76,15 +95,19 @@ namespace PA
 
 		Array<U32> edgeSupport;
 
-		U32 maxStrokes;
-		U32 maxSteps;
-		Scalar maxWidth;
+		Config config;
 
 		Scalar temperature;
 		Scalar maxTemperature;
 		Scalar optimalEnergy;
 
 		U32 step = 0;
+
+		using FragmentsMapDrawFunc = Void(*)(Array<Array<Fragment>>& fragments, RawCPUImage& surface);
+		using FragmentsDrawFunc = Void(*)(Array<Fragment>& fragments, RawCPUImage& surface);
+		FragmentsMapDrawFunc PutFragmentsMapOnHDRSurface = nullptr;
+		FragmentsDrawFunc PutFragmentsOnHDRSurface = nullptr;
+		FragmentsDrawFunc RemoveFragmentsFromHDRSurface = nullptr;
 
 		Mutex currentApproximationLock;
 		ThreadPool<> threadPool;
@@ -95,17 +118,30 @@ namespace PA
 namespace PA
 {
 	template<typename TF>
-	inline Annealer<TF>::Annealer(const RawCPUImage* reference, U32 maxStrokes, U32 maxSteps) :
+	inline Annealer<TF>::Annealer(const RawCPUImage* reference, const Config& cfg) :
 		grayscaleReference(reference->width, reference->height, EFormat::A8, true),
 		grayscaleReferenceFiltered(reference->width, reference->height, EFormat::A8, true),
 		currentApproximation(reference->width, reference->height, EFormat::A8, true),
 		workingApproximation(reference->width, reference->height, EFormat::A8, true),
 		workingApproximationHDR(reference->width, reference->height, EFormat::A32Float, true)
 	{
-		grayscaleReference.Clear(Byte(255));
-		currentApproximation.Clear(Byte(255));
-		workingApproximation.Clear(Byte(255));
-		workingApproximationHDR.Clear(F32(1.0));
+		if (cfg.darkOnLight)
+		{
+			PutFragmentsOnHDRSurface = SubtractFragmentsFromHDRSurface;
+			RemoveFragmentsFromHDRSurface = AddFragmentsOnHDRSurface;
+			PutFragmentsMapOnHDRSurface = SubtractFragmentsFromHDRSurface;
+		}
+		else
+		{
+			PutFragmentsOnHDRSurface = AddFragmentsOnHDRSurface;
+			RemoveFragmentsFromHDRSurface = SubtractFragmentsFromHDRSurface;
+			PutFragmentsMapOnHDRSurface = AddFragmentsOnHDRSurface;
+		}
+
+		grayscaleReference.Clear(Byte(cfg.bgLightness));
+		currentApproximation.Clear(Byte(cfg.bgLightness));
+		workingApproximation.Clear(Byte(cfg.bgLightness));
+		workingApproximationHDR.Clear(F32(cfg.bgLightness / 255.f));
 
 		for (auto i = 0u; i < reference->height; ++i)
 		{
@@ -118,14 +154,15 @@ namespace PA
 			}
 		}
 
+		config = cfg;
+		config.maxStrokes = cfg.maxStrokes ? cfg.maxStrokes : (reference->width * reference->height / 256);
+		config.edgeContribution = Clamp(cfg.edgeContribution, 0.f, 1.f);
+
 		auto grayscaleReferenceEdges = GradientMagnitude(threadPool, grayscaleReference);
-		grayscaleReferenceFiltered = AdditiveBlendA8(grayscaleReference, grayscaleReferenceEdges, 0.2f);
+		grayscaleReferenceFiltered = AdditiveBlendA8(grayscaleReference, grayscaleReferenceEdges, 1.f - config.edgeContribution);
 
 		FindEdgeSupport();
 
-		this->maxWidth = 4;
-		this->maxStrokes = maxStrokes ? maxStrokes : (reference->width * reference->height / 256);
-		this->maxSteps = maxSteps ? maxSteps : (1u << 26);
 		this->maxTemperature = 255 * 255;
 		temperature = maxTemperature;
 
@@ -150,7 +187,7 @@ namespace PA
 			threadPool
 		);
 
-		PutFragmentsOnHDRSurface(fragmentsMap, workingApproximationHDR);
+		PutFragmentsMapOnHDRSurface(fragmentsMap, workingApproximationHDR);
 		CopyHDRSurfaceToGSSurface(workingApproximationHDR, workingApproximation);
 		currentApproximation = workingApproximation;
 		optimalEnergy = GetEnergy(currentApproximation);
@@ -162,6 +199,7 @@ namespace PA
 		PruneCurves();
 		SaveProgress();
 		SerializeToWebP(workingApproximationHDR);
+		// TODO: Fix SerializeToSVG for dark backgrounds.
 		SerializeToSVG
 		(
 			Span<const QuadraticBezier>(strokes),
@@ -176,19 +214,36 @@ namespace PA
 			Span<const TF>(widths),
 			Span<const TF>(pigments),
 			grayscaleReference.width,
-			grayscaleReference.height
+			grayscaleReference.height,
+			config.darkOnLight,
+			config.bgLightness
 		);
 	}
 
 	template<typename TF>
 	inline auto Annealer<TF>::InitBezier() -> V
 	{
-		for (auto i = 0u; i < maxStrokes; ++i)
+		for (auto i = 0u; i < config.maxStrokes; ++i)
 		{
 			strokes.push_back(GetRandom2DQuadraticBezierInRange(TF(1)));
-			widths.push_back(GetUniformFloat(TF(1), TF(maxWidth)));
+			widths.push_back(GetUniformFloat(TF(1), TF(config.maxWidth)));
 			pigments.push_back(GetUniformFloat(TF(0), TF(1)));
 		}
+	}
+
+	template <typename TF>
+	inline auto Annealer<TF>::InsideInterestRegion(U32 i, U32 j) const -> B
+	{
+		auto p = Vec(i, j);
+		auto pNorm = grayscaleReference.ToNormalizedCoordinates(p) - TF(0.5);
+		return SDF::Round(SDF::Box2D(pNorm, Vec(TF(config.screenCutoff))), TF(config.screenCutoffRadius)) < TF(0);
+	}
+
+	template <typename TF>
+	inline auto Annealer<TF>::InsideInterestRegion(U32 i) const -> B
+	{
+		auto [x, y] = LebesgueCurveInverse(i);
+		return InsideInterestRegion(x, y);
 	}
 
 	template<typename TF>
@@ -198,8 +253,16 @@ namespace PA
 		{
 			for (auto j = 0u; j < grayscaleReferenceFiltered.width; ++j)
 			{
+				if (i % 4 == 0 && j % 4 == 0 || !InsideInterestRegion(i, j))
+				{
+					continue;
+				}
+
 				auto idx = LebesgueCurve(j, i);
-				if (grayscaleReferenceFiltered.data[idx] < 255)
+				if (
+						(config.darkOnLight && grayscaleReferenceFiltered.data[idx] < config.bgLightness) ||
+						(!config.darkOnLight && grayscaleReferenceFiltered.data[idx] > config.bgLightness)
+				   )
 				{
 					edgeSupport.push_back(idx);
 				}
@@ -267,11 +330,11 @@ namespace PA
 	inline auto Annealer<TF>::SaveProgress() -> V
 	{
 		Array<Byte> outBuffer;
-		if (step < maxSteps)
+		if (step < config.maxSteps)
 		{
-			Serialize(outBuffer, this->maxSteps);
-			Serialize(outBuffer, this->maxStrokes);
-			Serialize(outBuffer, this->maxSteps);
+			Serialize(outBuffer, this->config.maxSteps);
+			Serialize(outBuffer, this->config.maxStrokes);
+			Serialize(outBuffer, this->config.maxWidth);
 			Serialize(outBuffer, this->maxTemperature);
 			Serialize(outBuffer, this->step);
 			Serialize(outBuffer, this->temperature);
@@ -291,9 +354,9 @@ namespace PA
 		if (ReadWholeFile(CSaveFile, inBuffer))
 		{
 			Span<const Byte> inData(inBuffer.data(), inBuffer.size());
-			Deserialize(inData, this->maxSteps);
-			Deserialize(inData, this->maxStrokes);
-			Deserialize(inData, this->maxSteps);
+			Deserialize(inData, this->config.maxSteps);
+			Deserialize(inData, this->config.maxStrokes);
+			Deserialize(inData, this->config.maxWidth);
 			Deserialize(inData, this->maxTemperature);
 			Deserialize(inData, this->step);
 			Deserialize(inData, this->temperature);
@@ -325,7 +388,7 @@ namespace PA
 	template<typename TF>
 	inline auto Annealer<TF>::AnnealBezier() -> B
 	{
-		if (step >= maxSteps)
+		if (step >= config.maxSteps)
 		{
             Log("Annealing done.");
 			return false;
@@ -335,30 +398,51 @@ namespace PA
 
 		temperature = temperature * TF(0.999);
 
-		auto strokeIdx = GetUniformU32(0, strokes.size() - 1);
+		U32 strokeIdx = 0;
+		if (config.nonRandomStrokeSelection)
+		{
+			static U32 counter = 0;
+			strokeIdx = counter;
+			counter = (counter + 1) % strokes.size();
+	 	}
+		else
+		{
+			strokeIdx = GetUniformU32(0, strokes.size() - 1);
+		}
 
 		auto& oldCurve = strokes[strokeIdx];
 		auto& oldFragments = fragmentsMap[strokeIdx];
 		auto& oldWidth = widths[strokeIdx];
 		auto& oldPigment = pigments[strokeIdx];
 
-		auto s0 = GetUniformU32(0, edgeSupport.size() - 1);
+		Array<Fragment> newFragments;
+		QuadraticBezier newCurve;
 
-		auto maxLength = grayscaleReference.width * TF(0.2);
+		B validCurve = false; 
+		
+		auto maxLength = grayscaleReference.width * TF(0.1);
 		auto length = GetUniformFloat(TF(3), maxLength);
-		auto p1U = LebesgueCurveInverse(edgeSupport[s0]);
-		auto p1 = Vec(p1U.first, p1U.second);
-		auto a0 = GetUniformFloat(TF(0), Constants<TF>::C2Pi);
-		auto a2 = GetUniformFloat(TF(0), Constants<TF>::C2Pi);
-		auto p0 = p1 + length * Vec(Cos(a0), Sin(a0));
-		auto p2 = p1 + length * Vec(Cos(a2), Sin(a2));
-		auto newCurve = GetBezierPassingThrough(p0, p1, p2);
+
+		while (!validCurve) {
+			auto s0 = GetUniformU32(0, edgeSupport.size() - 1);
+			auto p1U = LebesgueCurveInverse(edgeSupport[s0]);
+			auto p1 = Vec(p1U.first, p1U.second);
+			auto p1Norm = grayscaleReference.ToNormalizedCoordinates(p1) - TF(0.5);
+			if (InsideInterestRegion(p1U.first, p1U.second)) {
+				auto a0 = GetUniformFloat(TF(0), Constants<TF>::C2Pi);
+				auto a2 = GetUniformFloat(TF(0), Constants<TF>::C2Pi);
+				auto p0 = p1 + length * Vec(Cos(a0), Sin(a0));
+				auto p2 = p1 + length * Vec(Cos(a2), Sin(a2));
+				newCurve = GetBezierPassingThrough(p0, p1, p2);
+				validCurve = true;
+			}
+		}
+
 
 		grayscaleReference.ToNormalizedCoordinates(Span<Vec>(newCurve.points));
-		auto newPigment = GetUniformFloat(TF(0), TF(1));
-		auto newWidth = Min(maxWidth, GetExponentialFloat((TF(2) / maxWidth)) * temperature + 1);
+		auto newPigment = GetUniformFloat(TF(0.01), TF(1));
+		auto newWidth = Min(config.maxWidth, GetExponentialFloat((TF(2) / config.maxWidth)) * temperature + 1);
 
-		Array<Fragment> newFragments;
 		RasterizeToFragments
 		(
 			newCurve,
@@ -393,7 +477,7 @@ namespace PA
 			opType = OpType::Update;
 		}
 
-		if (addEnergy < currentEnergy)
+		if (addEnergy < currentEnergy && strokes.size() < config.maxStrokes)
 		{
 			currentEnergy = addEnergy;
 			opType = OpType::Add;
@@ -411,7 +495,7 @@ namespace PA
 
 		if (currentEnergy < localEnergy || transitionThreshold > GetUniformFloat<TF>())
 		{
-			optimalEnergy -= energyImprovement;
+			optimalEnergy -= energyImprovement > 0 ? energyImprovement : 0.f;
 			if (opType == OpType::Remove)
 			{
 				RemoveFragmentsFromHDRSurface(newFragments, workingApproximationHDR);
@@ -440,7 +524,7 @@ namespace PA
 			CopyHDRSurfaceToGSSurface(workingApproximationHDR, workingApproximation, newFragments);
 		}
 
-		if (!(step % updateScreenAfterSteps) || step == maxSteps - 1)
+		if (!(step % updateScreenAfterSteps) || step == config.maxSteps - 1)
 		{
 			currentApproximationLock.lock();
 			currentApproximation = workingApproximation;
@@ -448,7 +532,7 @@ namespace PA
 		}
 
 		step++;
-		auto progress = TF(step) / maxSteps * TF(100);
+		auto progress = TF(step) / config.maxSteps * TF(100);
 
 		auto endTime = GetTimeStampUS();
 
@@ -509,7 +593,8 @@ namespace PA
 					continue;
 				}
 
-				auto diff = TF(grayscaleReferenceFiltered.data[i]) - TF(img.data[i]);
+				auto ref = TF(grayscaleReferenceFiltered.data[i]);
+				auto diff = ref - TF(img.data[i]);
 				energy += (diff * diff) / imgSize;
 			}
 			return energy;
@@ -554,7 +639,8 @@ namespace PA
 					continue;
 				}
 
-				auto diff = TF(grayscaleReferenceFiltered.data[i]) - TF(img.data[i]);
+				auto ref = TF(grayscaleReferenceFiltered.data[i]);
+				auto diff = ref - TF(img.data[i]);
 				energy += (diff * diff) / imgSize;
 
 				visitedFragments.SetBitUnsafe(i);
